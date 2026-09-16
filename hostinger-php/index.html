@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'">
+  <title>Aide à distance · support.spinecho.fr</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <h1>Aide à distance</h1>
+    <p>Partage d'écran ponctuel et sécurisé, pour la famille et les proches.</p>
+  </header>
+
+  <section id="intro" class="card">
+    <p>En cliquant sur <strong>Partager mon écran</strong>, votre écran est montré <strong>en direct</strong> à votre proche. Il ne peut ni contrôler votre souris ni votre clavier.</p>
+    <p>Vous gardez le contrôle complet et pouvez arrêter le partage à tout moment. <strong>Rien n'est enregistré.</strong></p>
+    <button id="startBtn" class="primary big" type="button">🖥️&nbsp; Partager mon écran</button>
+    <p class="hint">Aucun logiciel à installer. Un simple navigateur suffit.</p>
+  </section>
+
+  <section id="sharing" class="card hidden">
+    <div class="banner"><span class="dot"></span> Partage en cours</div>
+    <p>Communiquez ce code à la personne qui doit vous aider :</p>
+    <div id="code" class="code">······</div>
+    <p id="peerNote" class="hint"></p>
+    <button id="stopBtn" class="danger big" type="button">■&nbsp; Arrêter le partage</button>
+    <p class="hint">Fermer cet onglet arrête aussi le partage immédiatement.</p>
+  </section>
+
+  <section id="unsupported" class="card unsupported hidden">
+    <h2>Partage non disponible sur cet appareil</h2>
+    <p id="unsupportedMsg"></p>
+  </section>
+
+  <section id="status" class="card status hidden" role="status"></section>
+
+  <footer>Rien n'est enregistré. Les images ne circulent que pendant le partage, puis sont immédiatement supprimées.</footer>
+</main>
+<noscript><p class="noscript">Cette page nécessite JavaScript.</p></noscript>
+<script src="user.js"></script>
+</body>
+</html>

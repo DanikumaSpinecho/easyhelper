@@ -1,0 +1,13 @@
+# spinecho-support — hébergement mutualisé (LiteSpeed/Apache)
+
+# Pas de cache sur les pages et l'API : le relais doit rester temps réel
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html|php)$">
+    Header set Cache-Control "no-store"
+  </FilesMatch>
+</IfModule>
+
+# Ceinture-bretelles : le dossier de données n'est jamais servi
+RedirectMatch 403 ^/data/
+
+Options -Indexes

@@ -1,5 +1,9 @@
 # Déploiement sur support.spinecho.fr
 
+> **Vous êtes sur un hébergement mutualisé Hostinger (pas de VPS) ?**
+> Suivez plutôt [`hostinger-php/DEPLOYMENT.md`](hostinger-php/DEPLOYMENT.md) —
+> la variante Node.js décrite ici nécessite un serveur dédié.
+
 ## Prérequis
 
 - Un VPS (Debian 12 / Ubuntu 24.04 conseillés, 1 vCPU / 1 Go suffisent).

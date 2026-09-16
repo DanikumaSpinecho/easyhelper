@@ -1,5 +1,12 @@
 # Aide à distance — support.spinecho.fr
 
+> **Deux variantes d'hébergement**
+>
+> - **Hébergement mutualisé (Hostinger, OVH…) — sans VPS** : voir
+>   [`hostinger-php/`](hostinger-php/) — PHP pur, images envoyées par HTTPS
+>   (upload + long-polling), fonctionne sur votre espace web actuel.
+> - **VPS** : la variante Node.js + WebSocket décrite dans ce README.
+
 Partage d'écran ponctuel « vue seule » entre un proche (la personne aidée) et
 vous (le technicien). **Aucun logiciel à installer, aucune prise de contrôle,
 aucun enregistrement** : les images ne transitent qu'en mémoire pendant la
