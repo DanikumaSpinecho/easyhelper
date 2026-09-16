@@ -1,0 +1,12 @@
+#!/bin/sh
+# Hook post-receive du dépôt nu /home/u930580536/repos/support.git
+# Déploie la branche deploy-hostinger dans le dossier public du site.
+# config.php et data/ (non suivis par git) ne sont jamais touchés.
+TARGET=/home/u930580536/domains/spinecho.fr/public_html/support
+while read oldrev newrev refname
+do
+  if [ "$refname" = "refs/heads/deploy-hostinger" ]; then
+    git --work-tree="$TARGET" checkout -f deploy-hostinger
+    echo "[deploy] deploy-hostinger -> $TARGET"
+  fi
+done

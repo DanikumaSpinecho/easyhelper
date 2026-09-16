@@ -1,0 +1,2 @@
+# Le hook post-receive doit rester en LF (exécuté côté Linux)
+hostinger-php/deploy/* eol=lf

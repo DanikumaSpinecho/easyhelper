@@ -102,3 +102,20 @@ fait quand même automatiquement à chaque requête de l'API.
 - 1 à 3 partages simultanés confortablement (10 max configurable). Si un jour
   vous voulez de la vidéo fluide ou l'audio, la variante Node.js de ce dépôt
   (racine) est prête pour un petit VPS.
+
+## Déploiement par git push (en place)
+
+Un dépôt git nu est installé sur le serveur, hors racine web :
+`/home/u930580536/repos/support.git`. Pousser la branche `deploy-hostinger`
+déploie automatiquement dans `public_html/support` (hook `post-receive`,
+source dans `hostinger-php/deploy/`).
+
+Les fichiers non suivis par git ne sont jamais touchés : `config.php`
+(mot de passe technicien) et `data/` (sessions en cours) restent en place.
+
+Depuis le poste de développement :
+
+```bash
+powershell -File hostinger-php/deploy/build-deploy.ps1   # reconstruit la branche
+git push deploy deploy-hostinger:deploy-hostinger        # déploie
+```
