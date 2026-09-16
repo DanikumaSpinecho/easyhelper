@@ -3,6 +3,10 @@ config.json
 *.log
 .DS_Store
 
+# Ne jamais versionner d'archives : elles peuvent contenir config.php (mot de passe)
+et des données de session
+*.zip
+
 # Variante hébergement mutualisé
 hostinger-php/config.php
 hostinger-php/data/*

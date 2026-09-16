@@ -4,26 +4,84 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>Aide à distance · support.spinecho.fr</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23ff9ec6'/%3E%3Ctext x='32' y='45' font-size='34' text-anchor='middle'%3E🌱%3C/text%3E%3C/svg%3E">
+  <title>Aide à distance ♡ support.spinecho.fr</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="petals" aria-hidden="true">
+  <span class="petal p1">🌸</span>
+  <span class="petal p2">🌸</span>
+  <span class="petal p3">🌸</span>
+  <span class="petal p4">🌸</span>
+  <span class="petal p5">🌸</span>
+  <span class="petal p6">🌸</span>
+</div>
+
 <main class="wrap">
-  <header>
-    <h1>Aide à distance</h1>
-    <p>Partage d'écran ponctuel et sécurisé, pour la famille et les proches.</p>
+  <header class="hero">
+    <div class="mascot-wrap">
+      <svg class="mascot" viewBox="0 0 200 240" role="img" aria-label="Radis-kun, la mascotte radis kawaii">
+        <defs>
+          <linearGradient id="radisBody" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffffff"/>
+            <stop offset="0.7" stop-color="#fff7fa"/>
+            <stop offset="1" stop-color="#ffd9e8"/>
+          </linearGradient>
+        </defs>
+
+        <!-- étincelles -->
+        <path d="M38 68 l2.8 7.5 7.5 2.8 -7.5 2.8 -2.8 7.5 -2.8 -7.5 -7.5 -2.8 7.5 -2.8 z" fill="#ffd3e4"/>
+        <path d="M166 92 l2.2 6 6 2.2 -6 2.2 -2.2 6 -2.2 -6 -6 -2.2 6 -2.2 z" fill="#cdebc9"/>
+        <path d="M46 112 l1.7 4.6 4.6 1.7 -4.6 1.7 -1.7 4.6 -1.7 -4.6 -4.6 -1.7 4.6 -1.7 z" fill="#fff3b0"/>
+
+        <!-- feuilles -->
+        <path d="M100 44 C 76 36 54 38 46 22 C 64 16 82 22 98 34 Z" fill="#8ED08A"/>
+        <path d="M100 44 C 124 36 146 38 154 22 C 136 16 118 22 102 34 Z" fill="#8ED08A"/>
+        <path d="M100 46 C 90 32 90 12 100 4 C 110 12 110 32 100 46 Z" fill="#7CC97A"/>
+        <path d="M100 44 C 96 34 96 18 100 8" fill="none" stroke="#A8E6A3" stroke-width="3" stroke-linecap="round"/>
+
+        <!-- bras -->
+        <path d="M64 130 C 46 136 42 150 48 162" fill="none" stroke="#ffd3e4" stroke-width="8" stroke-linecap="round"/>
+        <path d="M136 130 C 154 136 158 150 152 162" fill="none" stroke="#ffd3e4" stroke-width="8" stroke-linecap="round"/>
+
+        <!-- corps -->
+        <path d="M100 46 C 60 46 42 104 53 178 C 57 204 76 218 100 218 C 124 218 143 204 147 178 C 158 104 140 46 100 46 Z" fill="url(#radisBody)" stroke="#ffb7d5" stroke-width="3.5"/>
+
+        <!-- joues -->
+        <ellipse cx="69" cy="146" rx="10" ry="7" fill="#ffb7d5" opacity="0.85"/>
+        <ellipse cx="131" cy="146" rx="10" ry="7" fill="#ffb7d5" opacity="0.85"/>
+
+        <!-- yeux -->
+        <ellipse cx="83" cy="124" rx="8.5" ry="11.5" fill="#4a3b45"/>
+        <ellipse cx="117" cy="124" rx="8.5" ry="11.5" fill="#4a3b45"/>
+        <circle cx="86.5" cy="119" r="3.4" fill="#ffffff"/>
+        <circle cx="120.5" cy="119" r="3.4" fill="#ffffff"/>
+        <circle cx="80" cy="130" r="1.7" fill="#ffffff"/>
+        <circle cx="114" cy="130" r="1.7" fill="#ffffff"/>
+
+        <!-- bouche -->
+        <path d="M93 140 Q100 148 107 140" fill="none" stroke="#e75480" stroke-width="3.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="hero-text">
+      <h1 class="kawaii-title">Aide à distance</h1>
+      <p class="subtitle">꒰ ♡ ꒱ Partage d'écran tout doux, pour la famille ꒰ ♡ ꒱</p>
+      <div class="bubble">Konnichiwa ! Moi c'est <strong>Radis-kun</strong> ٩(◕‿◕)۶<br>Partage ton écran en un clic — je ne garde rien, promis ♡</div>
+    </div>
   </header>
 
   <section id="intro" class="card">
-    <p>En cliquant sur <strong>Partager mon écran</strong>, votre écran est montré <strong>en direct</strong> à votre proche. Il ne peut ni contrôler votre souris ni votre clavier.</p>
-    <p>Vous gardez le contrôle complet et pouvez arrêter le partage à tout moment. <strong>Rien n'est enregistré.</strong></p>
-    <button id="startBtn" class="primary big" type="button">🖥️&nbsp; Partager mon écran</button>
-    <p class="hint">Aucun logiciel à installer. Un simple navigateur suffit.</p>
+    <p>En cliquant sur <strong>Partager mon écran</strong>, ton écran est montré <strong>en direct</strong> à ton proche. Il ne peut ni bouger ta souris ni toucher ton clavier — c'est tout doux, en lecture seule ♡</p>
+    <p>Tu gardes le contrôle à tout moment. <strong>Rien n'est enregistré.</strong></p>
+    <button id="startBtn" class="primary big" type="button">🌸&nbsp; Partager mon écran</button>
+    <p class="hint">Aucun logiciel à installer. Un simple navigateur suffit ✨</p>
   </section>
 
   <section id="sharing" class="card hidden">
-    <div class="banner"><span class="dot"></span> Partage en cours</div>
-    <p>Communiquez ce code à la personne qui doit vous aider :</p>
+    <div class="banner"><span class="dot"></span> Partage en cours !</div>
+    <p>Communique ce code à la personne qui va t'aider :</p>
     <div id="code" class="code">······</div>
     <p id="peerNote" class="hint"></p>
     <button id="stopBtn" class="danger big" type="button">■&nbsp; Arrêter le partage</button>
@@ -31,13 +89,13 @@
   </section>
 
   <section id="unsupported" class="card unsupported hidden">
-    <h2>Partage non disponible sur cet appareil</h2>
+    <h2>Oups… pas de partage ici (´｡• ᵕ •｡`)</h2>
     <p id="unsupportedMsg"></p>
   </section>
 
   <section id="status" class="card status hidden" role="status"></section>
 
-  <footer>Rien n'est enregistré. Les images ne circulent que pendant le partage, puis sont immédiatement supprimées.</footer>
+  <footer>Rien n'est enregistré ♡ Les images s'envolent comme des pétales sitôt le partage terminé.</footer>
 </main>
 <noscript><p class="noscript">Cette page nécessite JavaScript.</p></noscript>
 <script src="user.js"></script>
