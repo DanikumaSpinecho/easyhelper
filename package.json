@@ -12,7 +12,8 @@
     "set-password": "node scripts/set-password.js",
     "smoke": "node test/ws-smoke.js",
     "test-crypto": "node test/crypto-interop.mjs",
-    "test-ui": "node test/ui-zoom.mjs"
+    "test-ui": "node test/ui-zoom.mjs",
+    "test-browser": "node test/browser-e2e.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"
