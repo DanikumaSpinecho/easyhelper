@@ -15,6 +15,7 @@ const IDS = [
   'login', 'codeEntry', 'viewer', 'loginForm', 'pw', 'loginStatus',
   'codeForm', 'code', 'joinStatus', 'screen', 'screenBox', 'zoomIn',
   'zoomOut', 'zoomFit', 'zoomLabel', 'viewerStatus', 'closeBtn', 'logoutBtn',
+  'liveBanner', 'liveBannerText',
 ];
 
 function makeEl(id) {
@@ -22,7 +23,8 @@ function makeEl(id) {
   const el = {
     id,
     style: {},
-    textContent: '',
+    // Texte initial repris du HTML : la bannière porte déjà « Écran en direct ».
+    textContent: id === 'liveBannerText' ? 'Écran en direct' : '',
     disabled: false,
     handlers: {},
     classList: {
@@ -31,7 +33,11 @@ function makeEl(id) {
       contains: (c) => cls.has(c),
     },
     addEventListener(ev, fn) { (el.handlers[ev] = el.handlers[ev] || []).push(fn); },
-    click() { for (const f of (el.handlers.click || [])) f({ preventDefault() {} }); },
+    dispatch(ev, payload) { for (const f of (el.handlers[ev] || [])) f({ preventDefault() {}, ...payload }); },
+    click() { el.dispatch('click'); },
+    // Un appui réel émet 'pointerdown' PUIS 'click' : on reproduit les deux
+    // pour vérifier qu'un seul geste ne compte pas double.
+    tap() { el.dispatch('pointerdown'); el.dispatch('click'); },
     scrollTo() {},
   };
   return el;
@@ -71,6 +77,9 @@ function testZoom(jsPath, label) {
   const outBtn = els.get('zoomOut');
   const fitBtn = els.get('zoomFit');
   const box = els.get('screenBox');
+
+  const banner = els.get('liveBanner');
+  const bannerText = els.get('liveBannerText');
 
   // État initial : ajusté à la largeur, réduction impossible.
   assert.equal(lbl.textContent, '100 %', `[${label}] libellé initial`);
@@ -113,6 +122,22 @@ function testZoom(jsPath, label) {
   els.get('closeBtn').click();
   assert.equal(lbl.textContent, '100 %', `[${label}] zoom réinitialisé à la fermeture`);
 
+  // Un appui tactile ne compte qu'une fois : 'pointerdown' puis 'click'
+  // décrivent le MÊME geste et ne doivent pas produire deux incréments.
+  const beforeTap = lbl.textContent;
+  inBtn.tap();
+  assert.equal(lbl.textContent, '125 %', `[${label}] un appui = un seul incrément`);
+  assert.notEqual(lbl.textContent, beforeTap, `[${label}] l'appui a bien un effet`);
+  // Deux appuis rapides restent deux incréments (aucun blocage temporel).
+  inBtn.tap();
+  inBtn.tap();
+  assert.equal(lbl.textContent, '175 %', `[${label}] appuis rapides tous pris en compte`);
+
+  // La bannière annonce l'état réel, y compris à la fin du partage.
+  assert.equal(bannerText.textContent, 'Écran en direct', `[${label}] bannière initiale`);
+  assert.equal(banner.classList.contains('ended'), false, `[${label}] bannière active`);
+  els.get('closeBtn').click();
+
   console.log(`  OK  ${label} : zoom fonctionnel (25 % par clic, butées 100–500, ajustement, réinitialisation)`);
 }
 
@@ -125,6 +150,10 @@ function testPages() {
   ];
   for (const p of pages) {
     const html = readFileSync(new URL('../' + p.file, import.meta.url), 'utf8');
+    // Ressources versionnées : un cache navigateur ne doit jamais servir
+    // l'ancien JavaScript après une mise à jour (boutons inertes).
+    assert.match(html, /style\.css\?v=\d+/, `[${p.label}] CSS versionné`);
+    assert.match(html, /(tech|user|crypto)\.js\?v=\d+/, `[${p.label}] JS versionné`);
     // Crédit discret : auteur + icône GitHub + lien vers le dépôt.
     assert.match(html, /danikuma spinecho/, `[${p.label}] signature présente`);
     assert.match(html, /href="https:\/\/github\.com\/DanikumaSpinecho\/easyhelper"/,
@@ -138,8 +167,27 @@ function testPages() {
       assert.match(html, /id="zoomOut"/, `[${p.label}] bouton zoom − présent`);
       assert.match(html, /id="zoomFit"/, `[${p.label}] bouton d'ajustement présent`);
       assert.match(html, /id="screenBox"/, `[${p.label}] cadre de défilement présent`);
+      assert.match(html, /id="liveBannerText"/, `[${p.label}] bannière d'état pilotable`);
     }
     console.log(`  OK  ${p.label} : crédit discret, icône GitHub${p.wrench ? ' et lien clé à molette' : ' et boutons de zoom'}`);
+  }
+}
+
+function testStyles() {
+  for (const file of ['hostinger-php/style.css', 'public/style.css']) {
+    const css = readFileSync(new URL('../' + file, import.meta.url), 'utf8');
+    // Sans cette règle, « a:visited » (spécificité supérieure) fait virer le
+    // crédit au violet après un clic : rendu amateur et incohérent.
+    assert.match(css, /footer \.credit a:visited/, `[${file}] couleur du lien visité maîtrisée`);
+    assert.match(css, /justify-content: flex-end/, `[${file}] crédit aligné à droite`);
+    assert.match(css, /footer \.credit a\b/, `[${file}] couleur de base du crédit fixée`);
+    // On cherche une VALEUR de couleur violette, pas le mot dans un commentaire :
+    // la règle du crédit doit couvrir tous les états, donc aucune déclaration de
+    // couleur « violette » ne doit subsister hors commentaires.
+    const horsCommentaires = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.doesNotMatch(horsCommentaires, /#(7c3aed|8b5cf6|a855f7|6d28d9|9333ea)/i,
+      `[${file}] aucune teinte violette dans les règles`);
+    console.log(`  OK  ${file} : lien discret, gris constant même visité, aligné à droite`);
   }
 }
 
@@ -147,4 +195,5 @@ console.log('Interface technicien — vérification fonctionnelle');
 testZoom('hostinger-php/tech.js', 'variante PHP');
 testZoom('public/tech.js', 'variante Node');
 testPages();
-console.log('OK — zoom fonctionnel et éléments discrets conformes dans les deux variantes.');
+testStyles();
+console.log('OK — zoom, bannière d\'état, geste tactile et crédit discret conformes.');

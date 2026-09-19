@@ -95,19 +95,31 @@ input:focus { outline: 2px solid #2563eb; }
 .zoomLabel { min-width: 3.6em; text-align: center; font-variant-numeric: tabular-nums; }
 footer { color: #64748b; font-size: .85rem; text-align: center; margin-top: 24px; }
 footer .legal { margin: 0; }
-.credit { margin: 12px 0 0; display: flex; align-items: center; justify-content: center; gap: 12px; }
-.creditLink, .techLink {
-  color: #475569;                 /* discret : proche de la couleur du fond */
-  text-decoration: none;
-  display: inline-flex;
+.credit {
+  margin: 14px 0 0;
+  display: flex;
   align-items: center;
-  gap: 5px;
+  justify-content: flex-end;   /* en bas à droite */
+  gap: 10px;
+  font-size: .72rem;           /* plus petit, discret */
 }
-.creditLink { font-size: .78rem; }
-.creditLink:hover, .techLink:hover { color: #94a3b8; }
-.ghIcon { opacity: .85; }
-.techLink { opacity: .5; }
+/* « a:visited » a une spécificité supérieure aux classes : le lien virait au
+   violet après un clic. On fixe donc la couleur sur tous les états, avec une
+   spécificité au moins égale, pour un rendu constant et professionnel. */
+footer .credit a,
+footer .credit a:link,
+footer .credit a:visited,
+footer .credit a:active {
+  color: #5b6675;              /* gris clair, proche du fond */
+  text-decoration: none;
+}
+footer .credit a:hover { color: #94a3b8; }
+.creditLink { display: inline-flex; align-items: center; gap: 5px; }
+.ghIcon { opacity: .75; }
+.techLink { opacity: .4; display: inline-flex; align-items: center; }
 .techLink:hover { opacity: 1; }
+.banner.ended { background: #334155; }
+.banner.ended .dot { animation: none; opacity: .6; }
 .unsupported h2 { color: #fbbf24; font-size: 1.15rem; margin-top: 0; }
 .unsupported p { white-space: pre-line; line-height: 1.6; }
 .noscript { text-align: center; color: #94a3b8; }

@@ -24,7 +24,10 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SITE = path.join(ROOT, 'hostinger-php');
 const PORT = 8099;
-const ORIGIN = `http://127.0.0.1:${PORT}`;
+// BASE permet de viser un serveur déjà en ligne (production) plutôt que le
+// serveur PHP local : le même parcours réel sert alors de test de recette.
+const REMOTE = (process.env.BASE || '').replace(/\/+$/, '');
+const ORIGIN = REMOTE || `http://127.0.0.1:${PORT}`;
 const DEBUG_PORT = 9333;
 
 // Mot de passe : lu depuis la configuration locale, jamais recopié dans le code.
@@ -137,13 +140,17 @@ let chromeProc = null;
 const chromeDir = path.join(os.tmpdir(), 'easyhelper-chrome-' + Date.now());
 
 async function start() {
-  const php = findPhp();
-  if (!php) throw new Error('PHP CLI introuvable (définissez PHP_BIN)');
   const browser = findBrowser();
   if (!browser) throw new Error('Chrome ou Edge introuvable');
 
-  phpProc = spawn(php, ['-S', `127.0.0.1:${PORT}`, '-t', SITE], { stdio: 'ignore' });
-  await sleep(1500);
+  if (!REMOTE) {
+    const php = findPhp();
+    if (!php) throw new Error('PHP CLI introuvable (définissez PHP_BIN)');
+    phpProc = spawn(php, ['-S', `127.0.0.1:${PORT}`, '-t', SITE], { stdio: 'ignore' });
+    await sleep(1500);
+  } else {
+    console.log(`   (serveur distant : ${ORIGIN})`);
+  }
 
   // Le partage d'écran est autorisé sans boîte de dialogue et la source est
   // choisie automatiquement : c'est ce qui rend le parcours automatisable.
@@ -195,6 +202,9 @@ async function main() {
       href: a ? a.href : '',
       icone: !!document.querySelector('svg.ghIcon'),
       cible: a ? a.target : '',
+      couleur: a ? getComputedStyle(a).color : '',
+      taille: a ? getComputedStyle(a).fontSize : '',
+      scripts: [...document.scripts].map((s) => s.src.split('/').pop()).join(' '),
       lienTech: w ? w.getAttribute('href') : '',
       titreTech: w ? w.getAttribute('title') : '',
       discret: w ? getComputedStyle(w).opacity : '',
@@ -204,6 +214,13 @@ async function main() {
   assert.equal(credit.href, 'https://github.com/DanikumaSpinecho/easyhelper', 'lien du dépôt');
   assert.equal(credit.icone, true, 'icône GitHub présente');
   assert.equal(credit.cible, '_blank', 'ouverture dans un nouvel onglet');
+  // Le lien « visité » ne doit jamais devenir violet : couleur fixée sur tous
+  // les états, gris clair et petit pour rester discret et professionnel.
+  assert.equal(credit.couleur, 'rgb(91, 102, 117)', 'crédit en gris clair (aucun violet)');
+  assert.ok(parseFloat(credit.taille) <= 13, `crédit discret (${credit.taille})`);
+  // Ressources versionnées : un cache navigateur ne peut plus servir l'ancien
+  // JavaScript après une mise à jour (c'était la cause des boutons inertes).
+  assert.match(credit.scripts, /\?v=\d+/, 'ressources versionnées');
   assert.equal(credit.lienTech, 'tech.html', 'lien discret vers l\'espace technicien');
   assert.equal(credit.titreTech, 'Espace technicien', 'info-bulle du lien discret');
   console.log(`   crédit « ${credit.texte} » → dépôt, icône GitHub, lien discret (opacité ${credit.discret})`);
@@ -296,6 +313,17 @@ async function main() {
     'notification de fin côté technicien',
   );
   console.log(`   technicien informé : « ${fin} »`);
+
+  // La bannière doit refléter l'arrêt : elle annonçait « Écran en direct »
+  // indéfiniment, ce qui laissait croire que le partage continuait.
+  const banniere = await tech.waitFor(
+    `(() => { const b = document.getElementById('liveBanner');
+              return b.classList.contains('ended')
+                ? document.getElementById('liveBannerText').textContent : ''; })()`,
+    'bannière d\'état mise à jour après l\'arrêt',
+  );
+  assert.match(banniere, /termin/i, 'la bannière n\'annonce plus un direct');
+  console.log(`   bannière mise à jour : « ${banniere} »`);
 
   console.log('\nOK — parcours réel complet validé dans un vrai navigateur :');
   console.log('     partage d\'écran → chiffrement → déchiffrement → zoom → arrêt.');

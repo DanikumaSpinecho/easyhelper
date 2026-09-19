@@ -5,6 +5,15 @@
   <FilesMatch "\.(html|php)$">
     Header set Cache-Control "no-store"
   </FilesMatch>
+
+  # Ressources (JS/CSS) : revalidation systématique plutôt que cache long.
+  # Un cache de 7 jours servait l'ancien JavaScript après une mise à jour —
+  # les boutons ajoutés restaient alors inertes dans les navigateurs déjà
+  # venus. La revalidation (ETag) garantit que toute correction est visible
+  # au prochain chargement, pour un coût réseau négligeable (304).
+  <FilesMatch "\.(js|css)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
 </IfModule>
 
 # Ceinture-bretelles : le dossier de données n'est jamais servi

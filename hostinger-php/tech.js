@@ -27,6 +27,8 @@
   const zoomOutBtn = $('zoomOut');
   const zoomFitBtn = $('zoomFit');
   const zoomLabel = $('zoomLabel');
+  const liveBanner = $('liveBanner');
+  const liveBannerText = $('liveBannerText');
   const viewerStatus = $('viewerStatus');
   const closeBtn = $('closeBtn');
   const logoutBtn = $('logoutBtn');
@@ -43,6 +45,17 @@
   const ZOOM_STEP = 25;
   const ZOOM_FIT = 100;
   let zoom = ZOOM_FIT;
+
+  // La bannière reflète l'état réel du partage. Sans cela elle continuait
+  // d'annoncer « Écran en direct » après l'arrêt : seule la ligne de statut
+  // changeait, sous l'image, et l'information principale restait fausse.
+  function setLiveBanner(text, ended) {
+    if (liveBannerText) liveBannerText.textContent = text;
+    if (liveBanner) {
+      if (ended) liveBanner.classList.add('ended');
+      else liveBanner.classList.remove('ended');
+    }
+  }
 
   async function refreshAuth() {
     let authed = false;
@@ -122,6 +135,7 @@
   function openViewer(code) {
     controller = new AbortController();
     endMsg = null;
+    setLiveBanner('Connexion…', false);
     hide(codeCard);
     show(viewer);
     setStatus(viewerStatus, 'Connexion — attente des premières images…');
@@ -157,9 +171,11 @@
                 continue;
               }
               setStatus(viewerStatus, 'Connecté — écran en direct (chiffré de bout en bout).');
+              setLiveBanner('Écran en direct', false);
               renderFrame(plain);
             } else {
               setStatus(viewerStatus, 'Connecté — écran en direct.');
+              setLiveBanner('Écran en direct', false);
               renderFrame(new Uint8Array(buf));
             }
             retries = 0;
@@ -193,6 +209,7 @@
       ? 'La personne aidée a arrêté le partage.'
       : 'Session terminée (' + reason + ').';
     setStatus(viewerStatus, endMsg);
+    setLiveBanner('Partage terminé', true);
   }
 
   function renderFrame(bytes) {
@@ -216,8 +233,26 @@
     applyZoom();
   }
 
-  zoomInBtn.addEventListener('click', () => setZoom(zoom + ZOOM_STEP));
-  zoomOutBtn.addEventListener('click', () => setZoom(zoom - ZOOM_STEP));
+  // Un appui doit toujours produire un changement, même si le navigateur
+  // n'émet pas d'événement 'click' fiable sur ces boutons compacts (tactile,
+  // pavé tactile). On écoute donc aussi 'pointerdown', en dédupliquant le
+  // geste : un même appui déclenche 'pointerdown' PUIS 'click', ce qui
+  // compterait double. Les clics rapides restent tous pris en compte.
+  function onZoomButton(btn, fn) {
+    let handledByPointer = false;
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      handledByPointer = true;
+      fn();
+    });
+    btn.addEventListener('click', () => {
+      if (handledByPointer) { handledByPointer = false; return; }
+      fn();
+    });
+  }
+
+  onZoomButton(zoomInBtn, () => setZoom(zoom + ZOOM_STEP));
+  onZoomButton(zoomOutBtn, () => setZoom(zoom - ZOOM_STEP));
   zoomFitBtn.addEventListener('click', () => { setZoom(ZOOM_FIT); screenBox.scrollTo(0, 0); });
 
   closeBtn.addEventListener('click', () => closeViewer());
