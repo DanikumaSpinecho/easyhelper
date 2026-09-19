@@ -13,6 +13,7 @@
     "smoke": "node test/ws-smoke.js",
     "test-crypto": "node test/crypto-interop.mjs",
     "test-ui": "node test/ui-zoom.mjs",
+    "test-zoom-frame": "node test/zoom-frame.mjs",
     "test-browser": "node test/browser-e2e.mjs"
   },
   "dependencies": {

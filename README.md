@@ -112,40 +112,136 @@ Le relais d'images JPEG (plutôt que du WebRTC pair-à-pair) est le choix qui
 maximise la compatibilité réseau : WebRTC exige un serveur TURN pour traverser
 la plupart des NAT et échoue sur les réseaux qui filtrent l'UDP.
 
-## Sécurité
+## Sécurité de la liaison entre la personne aidée et le technicien
 
-- **Chiffrement de bout en bout** — les images sont chiffrées dans le
-  navigateur de la personne aidée et déchiffrées dans celui du technicien
-  (clés éphémères **ECDH P-256**, puis **AES-256-GCM** avec une clé dérivée par
-  HKDF-SHA256). La clé de session n'est jamais transmise : le relais ne voit
-  que des clés **publiques** et des octets opaques. Même en cas de
-  compromission du serveur, les images capturées sont inexploitables.
-  Aucune interaction supplémentaire pour la personne aidée.
-- **Authentification du technicien** — mot de passe haché scrypt, cookie
-  HttpOnly / SameSite=Strict / Secure, limitation des tentatives par IP
-  (10 par 15 min).
-- **Sessions temporaires** — code de session + jeton utilisateur de 256 bits
-  (envoyé en en-tête ou en premier message, jamais dans l'URL ni les journaux).
-- **Séparation des rôles** — le canal « personne aidée » ne fait qu'envoyer ;
-  le canal « technicien » ne fait que recevoir. Aucun message de contrôle.
-- **Limites** — taille et cadence des images, nombre de sessions par IP,
-  débit maximal par session.
-- **Expiration automatique** — inactivité 10 min, durée totale 1 h, session
-  technicien 12 h.
-- **Aucune conservation** — journaux minimaux (début/fin de session :
-  horodatage, durée, motif) ; jamais d'image ni d'IP.
+Cette section décrit précisément **ce qui protège les images** pendant leur
+ trajet, et **ce que le relais voit ou ne voit pas**. Elle vaut pour les deux
+variantes (Node.js et PHP mutualisé) : le mécanisme cryptographique est
+identique, seul le transport change.
+
+### Le principe : une clé que le serveur ne peut pas connaître
+
+L'idée tient en une phrase : **la clé qui chiffre les images est calculée dans
+les deux navigateurs, et n'est jamais transmise**. Le serveur ne voit passer
+que des clés **publiques** — à partir desquelles la clé de session ne peut pas
+être calculée — et des images déjà **chiffrées**. Un serveur compromis, un
+administrateur curieux ou un disque saisi ne donnent donc accès à **aucune
+image lisible**.
+
+### Déroulement réel (chiffrement de bout en bout)
+
+```
+   PERSONNE AIDÉE                    RELAIS (PHP ou Node)                TECHNICIEN
+    navigateur                     ne voit que du public               navigateur
+         │                                    │                              │
+         │ ① paire de clés éphémère           │                              │
+         │    ECDH P-256                      │                              │
+         │    clé privée : ne sort JAMAIS     │                              │
+         │                                    │                              │
+         │ ② create { clé publique A } ──────►│ sel = 16 octets aléatoires   │
+         │                                    │ mémorise : pub A, sel        │
+         │                                    │                              │
+         │                                    │◄──── ③ join { code, pub T } ─┤
+         │                                    │ mémorise : pub T             │
+         │                                    │                              │
+         │ ④ status ◄─────────────────────────┤─── renvoie pub T + sel ─────►│
+         │                                    │                              │
+    ┌────┴─────────────────────┐              │            ┌─────────────────┴────┐
+    │ clé = HKDF-SHA256(       │              │            │ clé = HKDF-SHA256(   │
+    │   ECDH(privée A, pub T), │              │            │   ECDH(privée T, pub A),
+    │   sel, "easyhelper/v1/frame")           │            │   sel, "easyhelper/v1/frame")
+    └────┬─────────────────────┘              │            └─────────────────┬────┘
+         │                                    │                              │
+         │      ═══════ LA MÊME CLÉ AES-256, JAMAIS TRANSMISE ═══════        │
+         │                                    │                              │
+         │ ⑤ image JPEG                       │                              │
+         │    chiffrée AES-256-GCM ──────────►│  octets opaques ────────────►│  déchiffre
+         │    IV aléatoire de 12 octets       │  (aucune image lisible)      │  et affiche
+```
+
+Les étapes ① et ④ sont les seules où quelque chose est échangé ; à l'étape ⑤,
+le relais transporte des octets qu'il ne sait pas interpréter.
+
+### Ce que chaque partie connaît
+
+| | Personne aidée | Relais | Technicien |
+|---|---|---|---|
+| Clé privée éphémère | oui | **non** | oui |
+| Clé publique de l'autre | oui | oui (elle transite) | oui |
+| Sel de dérivation | oui | oui (il le crée) | oui |
+| **Clé de session AES-256** | oui | **non** | oui |
+| Image en clair | oui | **jamais** | oui |
+
+C'est le point décisif : le sel et les clés publiques peuvent être publics sans
+affaiblir la sécurité. Recalculer la clé exigerait de résoudre le problème
+Diffie-Hellman sur courbe elliptique, c'est-à-dire d'extraire une clé privée
+qui n'a jamais quitté son navigateur.
+
+### Garanties apportées
+
+- **Confidentialité** — AES-256-GCM, clé dérivée par HKDF-SHA256, courbe P-256
+  (niveau de sécurité équivalent à ~128 bits, standard des navigateurs).
+- **Intégrité et authenticité de chaque image** — GCM est un chiffrement
+  *authentifié* : toute altération d'un octet en transit fait échouer le
+  déchiffrement, l'image corrompue est rejetée et jamais affichée.
+- **Fraîcheur** — un IV aléatoire de 12 octets est tiré pour **chaque** image,
+  ce qui empêche toute réutilisation de clé d'un cliché à l'autre.
+- **Clés éphémères** — une paire neuve à chaque session : compromettre une
+  session ne compromet aucune autre, ni les sessions passées.
+- **Aucune conservation** — les images ne sont jamais écrites durablement :
+  elles vivent en mémoire (Node) ou dans un fichier temporaire écrasé et
+  supprimé en fin de session (PHP), et restent illisibles pour le relais.
+
+### Limites, énoncées honnêtement
+
+- **Un relais activement malveillant peut s'intercaler.** L'échange de clés
+  n'est pas authentifié par un certificat : un serveur qui remplacerait les
+  clés publiques par les siennes verrait les images. La protection porte donc
+  contre un serveur **honnête mais curieux**, contre un accès à son stockage
+  ou à son disque, et contre un tiers sur le réseau — pas contre l'opérateur du
+  relais qui attaquerait activement. C'est un choix assumé : il n'y a rien à
+  installer, ce qui est la condition pour aider une personne en difficulté.
+- **Le mot de passe protège l'accès, pas la cryptographie.** Un technicien
+  authentifié voit ce que la personne aidée a accepté de montrer — d'où
+  l'importance du consentement explicite et de l'arrêt à tout moment.
+- **Repli en clair assumé.** Si un navigateur ne sait pas chiffrer, le partage
+  se poursuit sans chiffrement plutôt que de laisser la personne sans
+  assistance (« ✅ connecté » reste affiché, le statut distingue les deux cas).
+  Ce repli est visible dans le code et dans les échanges serveur.
+- **Le code de session à 6 chiffres** est devinable en théorie : l'accès
+  technicien est protégé par mot de passe et la vérification est limitée à
+  30 essais par minute et par IP.
+
+### Authentification et anti-abus
+
+- **Technicien** — mot de passe haché scrypt (Node) ou `password_verify` (PHP),
+  cookie/session HttpOnly, SameSite=Strict, Secure ; 10 tentatives par IP et
+  par 15 minutes ; identifiant de session régénéré à la connexion.
+- **Sessions temporaires** — code à 6 chiffres + jeton aléatoire de 256 bits
+  (transmis en en-tête ou en premier message, **jamais dans l'URL** ni dans les
+  journaux).
+- **Séparation des rôles** — le canal de la personne aidée ne fait qu'envoyer,
+  celui du technicien ne fait que recevoir ; aucun message de contrôle.
 - **Anti-abus** — vérification de l'en-tête `Origin` sur les WebSockets
-  (anti *cross-site WebSocket hijacking*), limites de débit et de taille,
-  en-têtes CSP, X-Frame-Options DENY, nosniff, Referrer-Policy.
+  (anti *cross-site WebSocket hijacking*) et en-têtes `nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy`.
+- **Limites** — taille d'image, cadence, débit, nombre de sessions par IP ;
+  expiration automatique (inactivité 10 min, 1 h au maximum).
+- **Aucune fuite dans les journaux** — ni image, ni IP : uniquement
+  début/fin de session (horodatage, durée, motif).
 
-**Chiffrement de bout en bout** : identique dans les deux variantes (Node.js et
-PHP mutualisé). Les images sont chiffrées dans le navigateur de la personne
-aidée et déchiffrées dans celui du technicien — échange de clés **ECDH P-256**
-éphémères puis **AES-256-GCM** (clé dérivée par HKDF-SHA256, jamais transmise).
-Le relais ne voit que des octets opaques et des clés publiques : un tiers — y
-compris ayant accès au serveur ou à son disque — ne peut pas reconstituer les
-images. Si un navigateur ne sait pas chiffrer, le repli est automatique pour ne
-jamais laisser la personne aidée sans assistance.
+### Comment le vérifier soi-même
+
+- `test/crypto-interop.mjs` — vérifie dans Node que le chiffrement correspond
+  bien à ECDH P-256 + HKDF-SHA256 + AES-256-GCM, que deux parties
+  indépendantes obtiennent **la même clé**, et qu'une image altérée est
+  **rejetée**.
+- `test/browser-e2e.mjs` — déroule un vrai partage d'écran dans un vrai
+  navigateur : les images arrivent déchiffrées, et le trafic ne contient que
+  des octets opaques.
+- Dans la page technicien, le statut indique « écran en direct (chiffré de bout
+  en bout) » lorsque le chiffrement est actif : l'information est visible, pas
+  dissimulée.
 
 ## Configuration (variante Node.js)
 

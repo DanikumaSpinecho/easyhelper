@@ -52,6 +52,17 @@ getDisplayMedia + canvas JPEG ──► POST api.php?action=upload ──► fic
 
 ## Sécurité (identique à la variante Node.js)
 
+> Le détail complet — schéma du chiffrement de bout en bout, ce que voit ou ne
+> voit pas le relais, garanties et **limites assumées** — se trouve dans le
+> [README racine, section « Sécurité de la liaison »](../README.md#sécurité-de-la-liaison-entre-la-personne-aidée-et-le-technicien).
+
+En résumé :
+
+- **Chiffrement de bout en bout** — les images sont chiffrées dans le
+  navigateur de la personne aidée (ECDH P-256 éphémère → clé AES-256-GCM
+  dérivée par HKDF-SHA256) et déchiffrées dans celui du technicien. La clé de
+  session n'est **jamais transmise** : le relais ne stocke que des clés
+  publiques et un sel, et ne manipule que des octets opaques.
 - **Authentification technicien** : mot de passe (haché scrypt → ici
   `password_verify`/`hash_equals`), session PHP cookie HttpOnly /
   SameSite=Strict / Secure, anti force brute par IP (10 tentatives / 15 min).
@@ -67,6 +78,10 @@ getDisplayMedia + canvas JPEG ──► POST api.php?action=upload ──► fic
   `data/` est interdit d'accès web (`.htaccess` + `RedirectMatch 403`).
 - **Anti-abus** : requêtes JSON (protégées par la politique CORS par défaut),
   limites de débit, en-têtes CSP/no-store/nosniff.
+
+Vérification possible sans faire confiance à la documentation :
+`node hostinger-php/test/crypto-interop.mjs` recalcule la clé des deux côtés et
+contrôle qu'une image altérée est bien rejetée.
 
 ## Configuration
 

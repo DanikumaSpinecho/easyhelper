@@ -83,12 +83,17 @@ input:focus { outline: 2px solid #2563eb; }
 .screen {
   background: #000;
   border-radius: 10px;
-  overflow: auto;          /* le zoom peut dépasser le cadre : on fait défiler */
-  max-height: 70vh;        /* une image zoomée n'étire pas la page indéfiniment */
+  /* Fenêtre de taille FIXE : la hauteur vient du VIEWPORT (via le rapport
+     16/10), jamais du contenu. Le zoom agrandit donc l'image À L'INTÉRIEUR,
+     et c'est le cadre qui défile — la page ne bouge pas. Sans cela le cadre
+     s'étirait avec l'image (354 px → 561 px) et repoussait tout le bas de
+     page, ce qui obligeait à faire défiler la page entière pour relire. */
+  aspect-ratio: 16 / 10;
+  max-height: 70vh;
+  overflow: auto;
   margin: 0 0 12px;
-  min-height: 180px;
 }
-.screen img { display: block; width: 100%; height: auto; margin: 0 auto; }
+.screen img { display: block; width: 100%; height: auto; }
 .zoomBar { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
 .zoomBtn { padding: 8px 14px; font-size: 1rem; line-height: 1; }
 .zoomBtn:disabled { opacity: .4; cursor: default; }
