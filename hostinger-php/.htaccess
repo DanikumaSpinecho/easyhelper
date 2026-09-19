@@ -13,6 +13,9 @@
   # au prochain chargement, pour un coût réseau négligeable (304).
   <FilesMatch "\.(js|css)$">
     Header set Cache-Control "no-cache, must-revalidate"
+    # Expires (7 jours) est posé en amont par l'hébergement : certains
+    # intermédiaires s'y fient encore, on le retire pour lever toute ambiguïté.
+    Header unset Expires
   </FilesMatch>
 </IfModule>
 
