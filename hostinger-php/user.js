@@ -1,11 +1,14 @@
 // Page « personne aidée » : partage d'écran en lecture seule (version hébergement mutualisé).
-// Les images sont envoyées par POST HTTPS (api.php?action=upload), ~2,5 par seconde.
+// Les images sont chiffrées de bout en bout (ECDH P-256 + AES-256-GCM) avant
+// l'envoi par POST HTTPS : le serveur ne relaie que des octets illisibles pour
+// lui. Aucune interaction supplémentaire n'est demandée à la personne aidée.
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
   const show = (el) => el.classList.remove('hidden');
   const hide = (el) => el.classList.add('hidden');
   const API = 'api.php';
+  const cryptoApi = window.EHCrypto;
 
   const startBtn = $('startBtn');
   const stopBtn = $('stopBtn');
@@ -26,6 +29,11 @@
   let failCount = 0;
   let intervalMs = 400;
   let timer = null;
+  let statusTimer = null;
+  // 'wait' : en attente de la clé du technicien ; 'encrypted' : images chiffrées ;
+  // 'plain' : envoi direct (navigateur ou technicien sans chiffrement).
+  let mode = 'wait';
+  let lastTechPub = '';
 
   function setStatus(text) {
     statusEl.textContent = text;
@@ -56,11 +64,14 @@
 
   function resetUi() {
     if (timer) { clearTimeout(timer); timer = null; }
+    if (statusTimer) { clearTimeout(statusTimer); statusTimer = null; }
     if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
     video = null;
     canvas = null;
     ctx = null;
     sessionInfo = null;
+    mode = 'wait';
+    lastTechPub = '';
     peerNote.textContent = '';
     document.title = 'Aide à distance · ' + location.host;
     hide(sharing);
@@ -72,6 +83,8 @@
     stopping = false;
     failCount = 0;
     intervalMs = 400;
+    mode = 'wait';
+    lastTechPub = '';
 
     // 1. Autorisation de capture d'abord (exige un geste utilisateur).
     let ds;
@@ -96,10 +109,15 @@
       setStatus('Le partage a été arrêté depuis le navigateur.');
     });
 
-    // 2. Création de la session relais.
+    // 2. Création de la session relais, avec notre clé publique éphémère.
+    const myPub = cryptoApi && cryptoApi.available ? await cryptoApi.pubkey() : '';
     let res;
     try {
-      res = await fetch(API + '?action=create', { method: 'POST' });
+      res = await fetch(API + '?action=create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userPub: myPub }),
+      });
     } catch {
       resetUi();
       setStatus('Impossible de contacter le serveur.');
@@ -114,6 +132,8 @@
       return;
     }
     sessionInfo = sess;
+    // Sans API de chiffrement dans ce navigateur, on envoie directement.
+    if (!cryptoApi || !cryptoApi.available || !myPub) mode = 'plain';
 
     // 3. Capture hors écran.
     video = document.createElement('video');
@@ -129,7 +149,55 @@
     codeEl.textContent = sessionInfo.code;
     hide(intro);
     show(sharing);
+    peerNote.textContent = 'En attente du technicien…';
+    // Les images ne partent qu'une fois le technicien connecté : rien n'est
+    // transmis avant, et la clé de chiffrement est alors négociée.
     scheduleTick();
+    pollStatus();
+  }
+
+  // Attend la clé publique du technicien (et surveille la fin de session).
+  async function pollStatus() {
+    if (stopping || !sessionInfo) return;
+    const delay = mode === 'encrypted' ? 4000 : 1000;
+    statusTimer = setTimeout(pollStatus, delay);
+    if (!sessionInfo || stopping) return;
+    try {
+      const res = await fetch(API + '?action=status', {
+        headers: { 'X-Code': sessionInfo.code, 'X-Token': sessionInfo.token },
+      });
+      if (res.status === 401) { endLocal('Session rejetée par le serveur.'); return; }
+      const j = await res.json().catch(() => null);
+      if (!j) return;
+      if (j.state === 'ended') {
+        endLocal('La session a été terminée (' + (j.reason || 'serveur') + ').');
+        return;
+      }
+      await syncTechKey(j.tech_pub || '', !!j.tech_joined, j.tech_crypto === true);
+      if (!j.tech_present) peerNote.textContent = 'En attente du technicien…';
+      else if (mode === 'wait') peerNote.textContent = 'Le technicien est connecté…';
+    } catch { /* réessai au prochain cycle */ }
+  }
+
+  // Négocie la clé dès que la clé publique du technicien est disponible.
+  // Si le technicien est connecté sans pouvoir chiffrer, on bascule en direct
+  // plutôt que de laisser la personne aidée sans assistance.
+  async function syncTechKey(techPub, techJoined, techCrypto) {
+    if (mode !== 'wait') return;
+    if (!techPub) {
+      // Connecté mais aucune clé publiée : repli explicite en envoi direct.
+      if (techJoined && !techCrypto) mode = 'plain';
+      return;
+    }
+    if (!cryptoApi || !cryptoApi.available || !sessionInfo) { mode = 'plain'; return; }
+    const key = await cryptoApi.derive(techPub, sessionInfo.salt || '');
+    if (key) {
+      lastTechPub = techPub;
+      mode = 'encrypted';
+      peerNote.textContent = '✅ Votre proche est connecté et voit votre écran.';
+    } else {
+      mode = 'plain';
+    }
   }
 
   function scheduleTick() {
@@ -140,6 +208,7 @@
     scheduleTick();
     if (stopping || !sessionInfo) return;
     if (!video || !video.videoWidth || capturing) return;
+    if (mode === 'wait') return;   // on attend la clé du technicien
     capturing = true;
 
     const scale = Math.min(1, 1280 / video.videoWidth);
@@ -157,23 +226,41 @@
     }
     if (!blob) { capturing = false; return; }
 
-    // Qualité adaptative : on reste sous ~190 Ko pour la limite serveur (200 Ko).
-    if (blob.size > 190 * 1024) quality = Math.max(0.3, quality - 0.1);
+    // On reste sous ~190 Ko, marge comprise pour l'en-tête de chiffrement (28 o).
+    if (blob.size > 185 * 1024) quality = Math.max(0.3, quality - 0.1);
     else if (blob.size < 60 * 1024 && quality < 0.75) quality = Math.min(0.75, quality + 0.05);
 
-    const buf = await blob.arrayBuffer().catch(() => null);
+    const raw = await blob.arrayBuffer().catch(() => null);
     capturing = false;
-    if (!buf || stopping || !sessionInfo) return;
+    if (!raw || stopping || !sessionInfo) return;
+
+    // Chiffrement de bout en bout quand c'est possible ; sinon envoi direct.
+    let payload;
+    let contentType;
+    if (mode === 'encrypted') {
+      const enc = await cryptoApi.encryptFrame(raw);
+      if (enc) {
+        payload = enc;
+        contentType = 'application/octet-stream';
+      } else {
+        payload = new Uint8Array(raw);
+        contentType = 'image/jpeg';
+        mode = 'plain';
+      }
+    } else {
+      payload = new Uint8Array(raw);
+      contentType = 'image/jpeg';
+    }
 
     try {
       const res = await fetch(API + '?action=upload', {
         method: 'POST',
         headers: {
-          'Content-Type': 'image/jpeg',
+          'Content-Type': contentType,
           'X-Code': sessionInfo.code,
           'X-Token': sessionInfo.token,
         },
-        body: buf,
+        body: payload,
       });
       if (res.status === 429) { intervalMs = Math.min(2000, intervalMs + 400); return; }
       if (res.status === 401) { endLocal('Session rejetée par le serveur.'); return; }
@@ -183,9 +270,8 @@
         endLocal('La session a été terminée (' + (j.reason || 'serveur') + ').');
         return;
       }
-      peerNote.textContent = j && j.tech_present
-        ? '✅ Votre proche est connecté et voit votre écran.'
-        : '';
+      if (j && j.tech_pub) await syncTechKey(j.tech_pub, !!j.tech_joined, j.tech_crypto === true);
+      if (j && j.tech_present) peerNote.textContent = '✅ Votre proche est connecté et voit votre écran.';
       failCount = 0;
     } catch {
       failCount++;

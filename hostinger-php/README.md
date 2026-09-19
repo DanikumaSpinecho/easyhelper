@@ -33,11 +33,15 @@ Sur un hébergement mutualisé, pas de processus permanent ni de WebSocket. Le
 relais utilise donc le HTTPS standard, seule chose disponible partout :
 
 ```
-Personne aidée (navigateur)          Hébergement Hostinger                    Technicien (navigateur)
+Personne aidée (navigateur)          Hébergement mutualisé                    Technicien (navigateur)
 getDisplayMedia + canvas JPEG ──► POST api.php?action=upload ──► fichier ──► GET api.php?action=fetch
-     2–3 img/s, 1280 px              temporaire + métadonnées                 (long-polling, image/jpeg)
+   chiffré AES-GCM, 2–3 img/s       temporaire + métadonnées     (long-polling, octets opaques)
 ```
 
+- Les images sont **chiffrées de bout en bout** : le serveur ne manipule que
+  des octets opaques, jamais une image lisible (voir la section Sécurité).
+- Rien n'est transmis tant que le technicien n'est pas connecté : la personne
+  aidée voit « En attente du technicien… », puis le partage démarre.
 - L'image courante est écrite de façon **atomique** (fichier temporaire +
   renommage) : le technicien ne voit jamais une image tronquée.
 - Le technicien fait du **long-polling** : une seule requête attend jusqu'à

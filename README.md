@@ -130,9 +130,13 @@ la plupart des NAT et échoue sur les réseaux qui filtrent l'UDP.
   (anti *cross-site WebSocket hijacking*), limites de débit et de taille,
   en-têtes CSP, X-Frame-Options DENY, nosniff, Referrer-Policy.
 
-**Objectif de sécurité (feuille de route)** : chiffrement de bout en bout des
-images, afin qu'un tiers ne puisse pas les exploiter — y compris un tiers ayant
-accès au serveur ou à son disque. La clé reste dans les deux navigateurs.
+**Chiffrement de bout en bout (implémenté dans la variante mutualisée)** : les
+images sont chiffrées dans le navigateur de la personne aidée et déchiffrées
+dans celui du technicien — échange de clés **ECDH P-256** éphémères puis
+**AES-256-GCM** (clé dérivée par HKDF-SHA256, jamais transmise). Le serveur ne
+relaie que des octets opaques et des clés publiques : un tiers — y compris
+ayant accès au serveur ou à son disque — ne peut pas reconstituer les images.
+La variante Node.js/VPS ci-dessous relaie encore les images en clair.
 
 ## Configuration (variante Node.js)
 

@@ -4,8 +4,9 @@
  * Variante hébergement mutualisé (Hostinger) : PHP pur, sans Node.js ni WebSocket.
  *
  * Actions (paramètre ?action=…) :
- *   create   POST   crée une session (personne aidée)          → {code, token}
- *   upload   POST   envoie une image JPEG (en-têtes X-Code/X-Token)
+ *   create   POST   crée une session (personne aidée)          → {code, token, salt}
+ *   upload   POST   envoie une image chiffrée (en-têtes X-Code/X-Token)
+ *   status   GET    état de la session (personne aidée) : technicien connecté ?
  *   stop     POST   termine la session (en-têtes X-Code/X-Token)
  *   login    POST   connexion technicien (JSON {password})
  *   logout   POST   déconnexion technicien
@@ -45,6 +46,21 @@ function read_json_body(): ?array
     return is_array($data) ? $data : null;
 }
 
+/**
+ * Authentifie la personne aidée à partir des en-têtes X-Code / X-Token.
+ * Renvoie la métadonnée de session, ou null.
+ */
+function session_from_headers(): ?array
+{
+    $code = valid_code((string) ($_SERVER['HTTP_X_CODE'] ?? ''));
+    $token = (string) ($_SERVER['HTTP_X_TOKEN'] ?? '');
+    if ($code === '') return null;
+    $meta = load_meta($code);
+    if ($meta === null) return null;
+    if (!hash_equals((string) $meta['tokenHash'], hash('sha256', $token))) return null;
+    return $meta;
+}
+
 $action = (string) ($_GET['action'] ?? '');
 
 switch ($action) {
@@ -73,6 +89,9 @@ switch ($action) {
         do {
             $code = (string) random_int(100000, 999999);
         } while (is_file(meta_path($code)));
+        $body = read_json_body();
+        $userPub = is_array($body) ? valid_pubkey((string) ($body['userPub'] ?? '')) : '';
+        $salt = bin2hex(random_bytes(16));
         $token = bin2hex(random_bytes(32));
         $meta = [
             'code' => $code,
@@ -82,11 +101,18 @@ switch ($action) {
             // La limite de cadence s'applique entre deux images : la première est toujours acceptée.
             'lastFrameAt' => now_ms() - $CONFIG['frame_min_interval_ms'],
             'frameId' => 0,
+            // Chiffrement de bout en bout : le serveur ne stocke que des clés
+            // publiques et un sel ; la clé de chiffrement reste dans les navigateurs.
+            'userPub' => $userPub,
+            'techPub' => '',
+            'salt' => $salt,
         ];
         save_meta($code, $meta);
         json_out(200, [
             'code' => $code,
             'token' => $token,
+            'salt' => $salt,
+            'crypto' => $userPub !== '' ? 'ecdh-p256-aesgcm' : 'none',
             'sessionMaxMs' => $CONFIG['session_max_ms'],
             'sessionIdleMs' => $CONFIG['session_idle_ms'],
         ]);
@@ -95,12 +121,9 @@ switch ($action) {
     case 'upload':
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_out(405, ['error' => 'method-not-allowed']);
         maybe_cleanup();
-        $code = valid_code((string) ($_SERVER['HTTP_X_CODE'] ?? ''));
-        $token = (string) ($_SERVER['HTTP_X_TOKEN'] ?? '');
-        $meta = $code !== '' ? load_meta($code) : null;
-        if ($meta === null || !hash_equals($meta['tokenHash'], hash('sha256', $token))) {
-            json_out(401, ['error' => 'unauthorized']);
-        }
+        $meta = session_from_headers();
+        if ($meta === null) json_out(401, ['error' => 'unauthorized']);
+        $code = $meta['code'];
         if (!empty($meta['ended'])) {
             json_out(200, ['state' => 'ended', 'reason' => $meta['ended']]);
         }
@@ -121,21 +144,40 @@ switch ($action) {
         @rename($tmp, frame_path($code)); // écriture atomique : le lecteur ne voit jamais d'image tronquée
         $meta['frameId'] = (int) $meta['frameId'] + 1;
         $meta['lastFrameAt'] = $now;
+        // On mémorise ce qui a réellement été envoyé : le technicien saura ainsi
+        // s'il doit déchiffrer ou afficher directement (repli automatique).
+        $meta['frameEnc'] = (stripos((string) ($_SERVER['CONTENT_TYPE'] ?? ''), 'octet-stream') !== false);
         save_meta($code, $meta);
         json_out(200, [
             'frameId' => $meta['frameId'],
             'tech_present' => tech_present($code),
+            'tech_pub' => (string) ($meta['techPub'] ?? ''),
+            'tech_crypto' => !empty($meta['techCrypto']),
+        ]);
+        break;
+    case 'status':
+        // La personne aidée attend que le technicien soit connecté (et sa clé
+        // publique) avant d'envoyer la première image chiffrée.
+        maybe_cleanup();
+        $meta = session_from_headers();
+        if ($meta === null) json_out(401, ['error' => 'unauthorized']);
+        $code = $meta['code'];
+        json_out(200, [
+            'state' => !empty($meta['ended']) ? 'ended' : 'live',
+            'reason' => (string) ($meta['ended'] ?? ''),
+            'tech_present' => tech_present($code),
+            'tech_joined' => !empty($meta['techJoined']),
+            'tech_pub' => (string) ($meta['techPub'] ?? ''),
+            'tech_crypto' => !empty($meta['techCrypto']),
+            'frameId' => (int) $meta['frameId'],
         ]);
         break;
 
     case 'stop':
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_out(405, ['error' => 'method-not-allowed']);
-        $code = valid_code((string) ($_SERVER['HTTP_X_CODE'] ?? ''));
-        $token = (string) ($_SERVER['HTTP_X_TOKEN'] ?? '');
-        $meta = $code !== '' ? load_meta($code) : null;
-        if ($meta === null || !hash_equals($meta['tokenHash'], hash('sha256', $token))) {
-            json_out(401, ['error' => 'unauthorized']);
-        }
+        $meta = session_from_headers();
+        if ($meta === null) json_out(401, ['error' => 'unauthorized']);
+        $code = $meta['code'];
         if (empty($meta['ended'])) {
             $meta['ended'] = 'user-stopped';
             save_meta($code, $meta);
@@ -200,7 +242,24 @@ switch ($action) {
         if ($code === '') json_out(400, ['error' => 'bad-code']);
         $meta = load_meta($code);
         if ($meta === null || !empty($meta['ended'])) json_out(404, ['error' => 'unknown-code']);
-        json_out(200, ['ok' => true]);
+        // Le technicien publie sa clé publique éphémère : elle sera transmise à
+        // la personne aidée (réponse de /status ou /upload) sans passer par nous
+        // en clair — nous ne pouvons pas en déduire la clé de session.
+        $techPub = valid_pubkey((string) (is_array($body) ? ($body['techPub'] ?? '') : ''));
+        $meta['techPub'] = $techPub;
+        // 'techJoined' distingue « pas encore connecté » de « connecté sans
+        // pouvoir chiffrer » : la personne aidée n'envoie rien avant la première
+        // connexion, puis bascule en direct seulement si c'est nécessaire.
+        $meta['techJoined'] = true;
+        $meta['techCrypto'] = $techPub !== '';
+        save_meta($code, $meta);
+        json_out(200, [
+            'ok' => true,
+            'userPub' => (string) ($meta['userPub'] ?? ''),
+            'salt' => (string) ($meta['salt'] ?? ''),
+            'crypto' => ($meta['userPub'] ?? '') !== '' ? 'ecdh-p256-aesgcm' : 'none',
+            'techCrypto' => $meta['techCrypto'],
+        ]);
         break;
 
     case 'fetch':
@@ -230,7 +289,9 @@ switch ($action) {
             if (is_file($frameFile)) {
                 @file_put_contents(presence_path($code), (string) time());
                 $size = (int) @filesize($frameFile);
-                header('Content-Type: image/jpeg');
+                $encrypted = !empty($current['frameEnc']);
+                header('Content-Type: ' . ($encrypted ? 'application/octet-stream' : 'image/jpeg'));
+                header('X-Encrypted: ' . ($encrypted ? '1' : '0'));
                 header('Cache-Control: no-store');
                 header('X-Content-Type-Options: nosniff');
                 header('X-Frame-Id: ' . (int) $current['frameId']);
@@ -258,6 +319,7 @@ switch ($action) {
             'password_configured' => $CONFIG['tech_password'] !== '' || $CONFIG['tech_password_hash'] !== '',
             'data_writable' => is_dir(SESSIONS_DIR) && $writable,
             'https' => is_https(),
+            'e2ee' => true,
             'sessions' => count(glob(SESSIONS_DIR . '/meta_*.json') ?: []),
         ]);
         break;

@@ -74,6 +74,13 @@ function meta_path(string $code): string
 
 function frame_path(string $code): string
 {
+    // Contenu opaque : soit une image JPEG (anciens clients), soit un
+    // chiffré AES-GCM (image + IV). Le serveur ne l'interprète jamais.
+    return SESSIONS_DIR . "/frame_{$code}.bin";
+}
+
+function frame_path_legacy(string $code): string
+{
     return SESSIONS_DIR . "/frame_{$code}.jpg";
 }
 
@@ -106,8 +113,7 @@ function tech_present(string $code): bool
     return (time() - (int) @file_get_contents($path)) < 15;
 }
 
-function rate_limited(string $kind, int $max, int $window_ms): bool
-{
+function rate_limited(string $kind, int $max, int $window_ms): bool{
     $path = DATA_DIR . '/rl_' . $kind . '_' . md5(client_ip()) . '.json';
     $times = [];
     if (is_file($path)) {
@@ -122,6 +128,18 @@ function rate_limited(string $kind, int $max, int $window_ms): bool
     $times[] = $now;
     @file_put_contents($path, json_encode($times));
     return count($times) > $max;
+}
+
+/**
+ * Valide une clé publique ECDH P-256 (point non compressé, 65 octets, préfixe 0x04).
+ * Renvoie la clé en base64 standard, ou '' si elle est absente/invalide.
+ */
+function valid_pubkey(string $b64): string
+{
+    if ($b64 === '' || strlen($b64) > 256) return '';
+    $raw = base64_decode(strtr($b64, '-_', '+/'), true);
+    if ($raw === false || strlen($raw) !== 65 || $raw[0] !== "\x04") return '';
+    return base64_encode($raw);
 }
 
 function cleanup_sessions(): int
@@ -143,6 +161,7 @@ function cleanup_sessions(): int
             $code = $meta['code'];
             @unlink($path);
             @unlink(frame_path($code));
+            @unlink(frame_path_legacy($code));
             @unlink(presence_path($code));
             @unlink(SESSIONS_DIR . "/tmpmeta_{$code}.tmp");
             @unlink(SESSIONS_DIR . "/tmpframe_{$code}.tmp");

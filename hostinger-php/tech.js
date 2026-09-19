@@ -1,5 +1,7 @@
-// Page technicien : authentification, saisie du code, visionneuse en lecture seule
-// (version hébergement mutualisé : long-polling sur api.php?action=fetch).
+// Page technicien : authentification, saisie du code, visionneuse en lecture seule.
+// Version hébergement mutualisé (long-polling) avec déchiffrement de bout en bout :
+// les images reçues sont déchiffrées dans ce navigateur (ECDH P-256 + AES-256-GCM),
+// le serveur ne les ayant jamais vues en clair.
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -8,6 +10,7 @@
   const setStatus = (el, text) => { el.textContent = text; if (text) show(el); else hide(el); };
   const API = 'api.php';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const cryptoApi = window.EHCrypto || { available: false };
 
   const loginCard = $('login');
   const codeCard = $('codeEntry');
@@ -26,6 +29,7 @@
   let controller = null;
   let objectUrl = null;
   let endMsg = null;
+  let encryptedSession = false;
 
   async function refreshAuth() {
     let authed = false;
@@ -42,6 +46,7 @@
     if (controller) { controller.abort(); controller = null; }
     if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
     endMsg = null;
+    encryptedSession = false;
     hide(viewer);
     if (backToCode) show(codeCard);
   }
@@ -72,12 +77,16 @@
     setStatus(joinStatus, '');
     const code = codeInput.value.replace(/\D/g, '').slice(0, 6);
     if (code.length !== 6) { setStatus(joinStatus, 'Le code comporte 6 chiffres.'); return; }
+
+    // Notre clé publique éphémère accompagne la vérification du code : elle sera
+    // transmise à la personne aidée, qui chiffrera pour nous seul.
+    const techPub = cryptoApi && cryptoApi.available ? await cryptoApi.pubkey() : '';
     let res;
     try {
       res = await fetch(API + '?action=join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, techPub }),
       });
     } catch {
       setStatus(joinStatus, 'Impossible de contacter le serveur.');
@@ -86,6 +95,13 @@
     if (res.status === 404) { setStatus(joinStatus, 'Code inconnu ou session déjà terminée.'); return; }
     if (res.status === 401) { refreshAuth(); return; }
     if (!res.ok) { setStatus(joinStatus, 'Erreur (' + res.status + '). Réessayez.'); return; }
+
+    let info = null;
+    try { info = await res.json(); } catch { /* ignore */ }
+    if (info && info.crypto === 'ecdh-p256-aesgcm' && info.userPub) {
+      const key = await cryptoApi.derive(info.userPub, info.salt || '');
+      encryptedSession = !!key;
+    }
     openViewer(code);
   });
 
@@ -110,11 +126,28 @@
         if (res.status === 204) { retries = 0; continue; } // attente longue côté serveur : on reboucle
         if (res.status === 200) {
           const ct = res.headers.get('Content-Type') || '';
-          if (ct.indexOf('image/jpeg') === 0) {
+          if (ct.indexOf('image/jpeg') === 0 || ct.indexOf('application/octet-stream') === 0) {
             after = parseInt(res.headers.get('X-Frame-Id') || String(after), 10);
-            setStatus(viewerStatus, 'Connecté — écran en direct.');
             const buf = await res.arrayBuffer();
-            if (controller) renderFrame(buf);
+            if (!controller) return;
+            if (ct.indexOf('application/octet-stream') === 0) {
+              if (!cryptoApi.available || typeof cryptoApi.decryptFrame !== 'function') {
+                setStatus(viewerStatus, 'Image protégée : ce navigateur ne prend pas en charge le déchiffrement.');
+                retries = 0;
+                continue;
+              }
+              const plain = await cryptoApi.decryptFrame(new Uint8Array(buf));
+              if (!plain) {
+                setStatus(viewerStatus, 'Image protégée — déchiffrement en cours…');
+                retries = 0;
+                continue;
+              }
+              setStatus(viewerStatus, 'Connecté — écran en direct (chiffré de bout en bout).');
+              renderFrame(plain);
+            } else {
+              setStatus(viewerStatus, 'Connecté — écran en direct.');
+              renderFrame(new Uint8Array(buf));
+            }
             retries = 0;
             continue;
           }
@@ -148,8 +181,8 @@
     setStatus(viewerStatus, endMsg);
   }
 
-  function renderFrame(buf) {
-    const url = URL.createObjectURL(new Blob([buf], { type: 'image/jpeg' }));
+  function renderFrame(bytes) {
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
     screenImg.src = url;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = url;
