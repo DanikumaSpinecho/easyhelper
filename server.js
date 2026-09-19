@@ -93,6 +93,11 @@ function createSession(ip) {
     byteWindow: { t: Date.now(), bytes: 0 },
     userWs: null,
     techWs: null,
+    // Chiffrement de bout en bout : le serveur ne détient que des clés
+    // PUBLIQUES et un sel ; la clé de session reste dans les navigateurs.
+    salt: crypto.randomBytes(16).toString('hex'),
+    userPub: '',
+    techPub: '',
   };
   sessions.set(code, session);
   return session;
@@ -129,6 +134,50 @@ function verifyPassword(password, stored) {
   } catch {
     return false;
   }
+}
+
+/**
+ * Valide une clé publique ECDH P-256 (point non compressé, 65 octets, préfixe 0x04).
+ * Renvoie la clé en base64 standard, ou '' si elle est absente/invalide.
+ */
+function validPubkey(b64) {
+  if (typeof b64 !== 'string' || b64.length === 0 || b64.length > 256) return '';
+  const raw = Buffer.from(b64, 'base64');
+  if (raw.length !== 65 || raw[0] !== 0x04) return '';
+  return raw.toString('base64');
+}
+
+/**
+ * Prévient la personne aidée de l'arrivée du technicien, en lui transmettant
+ * la clé publique de celui-ci : elle peut alors chiffrer à son intention seule.
+ */
+function notifyTechJoined(session) {
+  if (!session.userWs || session.userWs.readyState !== WebSocket.OPEN) return;
+  try {
+    session.userWs.send(JSON.stringify({
+      type: 'tech-joined',
+      techPub: session.techPub,
+      salt: session.salt,
+      techCrypto: session.techPub !== '',
+    }));
+  } catch { /* ignore */ }
+}
+
+/**
+ * Transmet au technicien la clé publique de la personne aidée dès qu'elle est
+ * connue : sans cela, un technicien connecté en premier ne pourrait rien
+ * déchiffrer (les deux arrivées sont possibles dans n'importe quel ordre).
+ */
+function notifyUserKey(session) {
+  if (!session.techWs || session.techWs.readyState !== WebSocket.OPEN) return;
+  try {
+    session.techWs.send(JSON.stringify({
+      type: 'user-pub',
+      userPub: session.userPub,
+      salt: session.salt,
+      crypto: session.userPub ? 'ecdh-p256-aesgcm' : 'none',
+    }));
+  } catch { /* ignore */ }
 }
 
 function parseCookies(req) {
@@ -276,6 +325,11 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, {
       code: session.code,
       token: session.userToken,
+      // Chiffrement de bout en bout : la clé publique de la personne aidée et
+      // celle du technicien seront échangées via le relais, qui ne peut pas en
+      // déduire la clé de session.
+      crypto: 'ecdh-p256-aesgcm',
+      salt: session.salt,
       sessionMaxMs: config.sessionMaxMs,
       sessionIdleMs: config.sessionIdleMs,
     });
@@ -293,8 +347,20 @@ async function handleApi(req, res, url) {
     const body = await readJson(req);
     const code = body && typeof body.code === 'string' ? body.code.trim() : '';
     if (!/^\d{6}$/.test(code)) return sendJson(res, 400, { error: 'bad-code' });
-    if (!sessions.has(code)) return sendJson(res, 404, { error: 'unknown-code' });
-    return sendJson(res, 200, { ok: true });
+    const session = sessions.get(code);
+    if (!session) return sendJson(res, 404, { error: 'unknown-code' });
+    // Le technicien publie sa clé publique éphémère ici (et non sur le canal
+    // WebSocket, qui reste en réception seule) : la personne aidée la recevra
+    // pour chiffrer à son intention. Le serveur ne peut pas en déduire la clé.
+    const techPub = validPubkey(body && typeof body.techPub === 'string' ? body.techPub : '');
+    session.techPub = techPub;
+    return sendJson(res, 200, {
+      ok: true,
+      userPub: session.userPub,
+      salt: session.salt,
+      crypto: session.userPub ? 'ecdh-p256-aesgcm' : 'none',
+      techCrypto: techPub !== '',
+    });
   }
 
   return sendJson(res, 404, { error: 'not-found' });
@@ -368,8 +434,18 @@ function handleUserUpgrade(req, socket, head, st) {
         if (!found) return ws.close(1008, 'unauthorized');
         session = found;
         session.userWs = ws;
+        // La personne aidée annonce sa clé publique au moment de s'authentifier.
+        session.userPub = validPubkey(typeof msg.userPub === 'string' ? msg.userPub : '');
+        // Le technicien peut déjà être connecté : il lui faut notre clé publique.
+        notifyUserKey(session);
         if (session.techWs && session.techWs.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'tech-joined' }));
+          // Le technicien est déjà là : on transmet sa clé et on signale sa présence.
+          notifyTechJoined(session);
+          ws.send(JSON.stringify({
+            type: 'tech-present',
+            techPub: session.techPub,
+            techCrypto: session.techPub !== '',
+          }));
         }
         return;
       }
@@ -414,7 +490,15 @@ function handleTechUpgrade(req, socket, head, url, st) {
       try { session.techWs.close(4000, 'replaced'); } catch { /* ignore */ }
     }
     session.techWs = ws;
-    ws.send(JSON.stringify({ type: 'joined' }));
+    // Le technicien reçoit le sel et la clé publique de la personne aidée, puis
+    // cette dernière est prévenue de son arrivée (elle chiffrera pour lui seul).
+    ws.send(JSON.stringify({
+      type: 'joined',
+      salt: session.salt,
+      userPub: session.userPub,
+      crypto: session.userPub ? 'ecdh-p256-aesgcm' : 'none',
+    }));
+    notifyTechJoined(session);
   });
 }
 

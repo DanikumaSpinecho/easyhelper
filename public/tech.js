@@ -1,10 +1,15 @@
-// Page technicien : authentification, saisie du code, visionneuse en lecture seule.
+// Page technicien : authentification, saisie du code, visionneuse en lecture seule
+// (variante Node.js). Les images reçues sont déchiffrées dans ce navigateur
+// (ECDH P-256 + AES-256-GCM) : le relais ne les a jamais vues en clair.
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
   const show = (el) => el.classList.remove('hidden');
   const hide = (el) => el.classList.add('hidden');
   const setStatus = (el, text) => { el.textContent = text; if (text) show(el); else hide(el); };
+  const cryptoApi = window.EHCrypto || { available: false };
+
+  const FLAG_ENCRYPTED = 1;
 
   const loginCard = $('login');
   const codeCard = $('codeEntry');
@@ -23,6 +28,7 @@
   let ws = null;
   let objectUrl = null;
   let endMsg = null;
+  let salt = '';
 
   async function refreshAuth() {
     let authed = false;
@@ -67,24 +73,36 @@
     setStatus(joinStatus, '');
     const code = codeInput.value.replace(/\D/g, '').slice(0, 6);
     if (code.length !== 6) { setStatus(joinStatus, 'Le code comporte 6 chiffres.'); return; }
+
+    // Notre clé publique éphémère accompagne la vérification du code : elle sera
+    // transmise à la personne aidée, qui chiffrera pour nous seul.
+    const techPub = cryptoApi.available ? await cryptoApi.pubkey() : '';
     let res;
     try {
       res = await fetch('/api/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, techPub }),
       });
     } catch {
       setStatus(joinStatus, 'Impossible de contacter le serveur.');
       return;
     }
     if (res.status === 404) { setStatus(joinStatus, 'Code inconnu ou session déjà terminée.'); return; }
+    if (res.status === 401) { refreshAuth(); return; }
     if (!res.ok) { setStatus(joinStatus, 'Erreur (' + res.status + '). Réessayez.'); return; }
+
+    let info = null;
+    try { info = await res.json(); } catch { /* ignore */ }
+    if (info && info.salt) salt = info.salt;
+    if (info && info.crypto === 'ecdh-p256-aesgcm' && info.userPub && cryptoApi.available) {
+      // La personne aidée était déjà connectée : on dérive la clé sans attendre.
+      await cryptoApi.derive(info.userPub, salt);
+    }
     openViewer(code);
   });
 
   function openViewer(code) {
-    closeViewer(false);
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(proto + '//' + location.host + '/ws/tech?code=' + encodeURIComponent(code));
     ws.binaryType = 'arraybuffer';
@@ -93,11 +111,19 @@
       show(viewer);
       setStatus(viewerStatus, 'Connecté — écran en direct.');
     };
-    ws.onmessage = (ev) => {
+    ws.onmessage = async (ev) => {
       if (typeof ev.data === 'string') {
         let msg;
         try { msg = JSON.parse(ev.data); } catch { return; }
-        if (msg.type === 'session-ended') {
+        if (msg.type === 'joined') {
+          // Sel et clé publique de la personne aidée : de quoi déchiffrer.
+          if (msg.salt) salt = msg.salt;
+          if (msg.userPub && cryptoApi.available) await cryptoApi.derive(msg.userPub, salt);
+        } else if (msg.type === 'user-pub') {
+          // La personne aidée vient de s'authentifier (clé publiée après coup).
+          if (msg.salt) salt = msg.salt;
+          if (msg.userPub && cryptoApi.available) await cryptoApi.derive(msg.userPub, salt);
+        } else if (msg.type === 'session-ended') {
           endMsg = msg.reason === 'user-stopped'
             ? 'La personne aidée a arrêté le partage.'
             : 'Session terminée (' + msg.reason + ').';
@@ -105,7 +131,26 @@
         }
         return;
       }
-      renderFrame(ev.data);
+      const bytes = new Uint8Array(ev.data);
+      if (bytes.length < 2) return;
+      const flag = bytes[0];
+      const payload = bytes.subarray(1);
+      if (flag === FLAG_ENCRYPTED) {
+        if (!cryptoApi.available || typeof cryptoApi.decryptFrame !== 'function') {
+          setStatus(viewerStatus, 'Image protégée : ce navigateur ne prend pas en charge le déchiffrement.');
+          return;
+        }
+        const plain = await cryptoApi.decryptFrame(payload);
+        if (!plain) {
+          setStatus(viewerStatus, 'Image protégée — déchiffrement impossible (clé non négociée).');
+          return;
+        }
+        setStatus(viewerStatus, 'Connecté — écran en direct (chiffré de bout en bout).');
+        renderFrame(plain);
+      } else {
+        setStatus(viewerStatus, 'Connecté — écran en direct.');
+        renderFrame(payload);
+      }
     };
     ws.onclose = () => {
       ws = null;
@@ -116,8 +161,8 @@
     ws.onerror = () => { try { if (ws) ws.close(); } catch { /* ignore */ } };
   }
 
-  function renderFrame(buf) {
-    const url = URL.createObjectURL(new Blob([buf], { type: 'image/jpeg' }));
+  function renderFrame(bytes) {
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
     screenImg.src = url;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = url;

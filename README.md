@@ -100,7 +100,8 @@ Personne aidée (navigateur)              serveur EasyHelper               Techn
 - La personne aidée capture son écran via l'API standard `getDisplayMedia`
   (autorisation explicite, indicateur natif de partage du navigateur). Les
   images sont réduites à 1280 px de large, compressées en JPEG avec une
-  qualité adaptative (~60–150 Ko), envoyées à ~3 images/s.
+  qualité adaptative (~60–150 Ko), **chiffrées dans le navigateur** puis
+  envoyées à ~3 images/s.
 - Le serveur **ne stocke rien** : il relaie en mémoire et détruit la session à
   la fin. Une session se termine automatiquement après 10 min sans image ou
   1 h au total (réglable).
@@ -113,6 +114,13 @@ la plupart des NAT et échoue sur les réseaux qui filtrent l'UDP.
 
 ## Sécurité
 
+- **Chiffrement de bout en bout** — les images sont chiffrées dans le
+  navigateur de la personne aidée et déchiffrées dans celui du technicien
+  (clés éphémères **ECDH P-256**, puis **AES-256-GCM** avec une clé dérivée par
+  HKDF-SHA256). La clé de session n'est jamais transmise : le relais ne voit
+  que des clés **publiques** et des octets opaques. Même en cas de
+  compromission du serveur, les images capturées sont inexploitables.
+  Aucune interaction supplémentaire pour la personne aidée.
 - **Authentification du technicien** — mot de passe haché scrypt, cookie
   HttpOnly / SameSite=Strict / Secure, limitation des tentatives par IP
   (10 par 15 min).
@@ -130,13 +138,14 @@ la plupart des NAT et échoue sur les réseaux qui filtrent l'UDP.
   (anti *cross-site WebSocket hijacking*), limites de débit et de taille,
   en-têtes CSP, X-Frame-Options DENY, nosniff, Referrer-Policy.
 
-**Chiffrement de bout en bout (implémenté dans la variante mutualisée)** : les
-images sont chiffrées dans le navigateur de la personne aidée et déchiffrées
-dans celui du technicien — échange de clés **ECDH P-256** éphémères puis
-**AES-256-GCM** (clé dérivée par HKDF-SHA256, jamais transmise). Le serveur ne
-relaie que des octets opaques et des clés publiques : un tiers — y compris
-ayant accès au serveur ou à son disque — ne peut pas reconstituer les images.
-La variante Node.js/VPS ci-dessous relaie encore les images en clair.
+**Chiffrement de bout en bout** : identique dans les deux variantes (Node.js et
+PHP mutualisé). Les images sont chiffrées dans le navigateur de la personne
+aidée et déchiffrées dans celui du technicien — échange de clés **ECDH P-256**
+éphémères puis **AES-256-GCM** (clé dérivée par HKDF-SHA256, jamais transmise).
+Le relais ne voit que des octets opaques et des clés publiques : un tiers — y
+compris ayant accès au serveur ou à son disque — ne peut pas reconstituer les
+images. Si un navigateur ne sait pas chiffrer, le repli est automatique pour ne
+jamais laisser la personne aidée sans assistance.
 
 ## Configuration (variante Node.js)
 
