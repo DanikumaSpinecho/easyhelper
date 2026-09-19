@@ -19,7 +19,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const SITE = path.join(ROOT, 'hostinger-php');
+const SITE = path.join(ROOT, 'php-full');
 const PORT = 8097;
 // BASE permet de mesurer le site réellement en ligne plutôt que le serveur
 // PHP local : le même contrôle sert alors de recette sur la production.

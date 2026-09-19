@@ -1,16 +1,13 @@
 {
-  "name": "easyhelper",
+  "name": "easyhelper-tests",
   "version": "0.1.0",
-  "description": "Assistance à distance par partage d'écran en lecture seule — aucune prise de contrôle, aucun enregistrement, images chiffrées de bout en bout",
+  "description": "Tests transverses des deux variantes d'EasyHelper (PHP mutualisé et Node.js/VPS)",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "start": "node server.js",
-    "set-password": "node scripts/set-password.js",
-    "smoke": "node test/ws-smoke.js",
     "test-crypto": "node test/crypto-interop.mjs",
     "test-ui": "node test/ui-zoom.mjs",
     "test-zoom-frame": "node test/zoom-frame.mjs",

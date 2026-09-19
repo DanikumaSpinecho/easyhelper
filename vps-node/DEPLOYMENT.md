@@ -1,7 +1,7 @@
 # Déploiement sur assistance.example.org
 
 > **Vous êtes sur un hébergement mutualisé Hostinger (pas de VPS) ?**
-> Suivez plutôt [`hostinger-php/DEPLOYMENT.md`](hostinger-php/DEPLOYMENT.md) —
+> Suivez plutôt [`php-full/DEPLOYMENT.md`](../php-full/DEPLOYMENT.md) —
 > la variante Node.js décrite ici nécessite un serveur dédié.
 
 ## Prérequis
@@ -26,7 +26,7 @@ node --version   # v22.x attendu
 sudo useradd -r -m -s /usr/sbin/nologin easyhelper
 sudo mkdir -p /opt/easyhelper
 sudo chown easyhelper:easyhelper /opt/easyhelper
-# copier les fichiers (git clone ou scp depuis votre poste), puis :
+# copier le CONTENU du dossier vps-node/ (git clone ou scp depuis votre poste), puis :
 cd /opt/easyhelper
 sudo -u easyhelper npm install --omit=dev
 sudo -u easyhelper node scripts/set-password.js

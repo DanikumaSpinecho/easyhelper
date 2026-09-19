@@ -1,6 +1,6 @@
 // Test de bout en bout du relais Node.js (sans navigateur).
 // Prérequis : serveur lancé sur 127.0.0.1:3080 et mot de passe technicien défini.
-//   $env:TEST_PASSWORD='<mot-de-passe>'; node test/ws-smoke.js
+//   $env:TEST_PASSWORD='<mot-de-passe>'; node vps-node/test/ws-smoke.js
 //
 // Couvre aussi le chiffrement de bout en bout : l'arbre de clés reproduit ici
 // (ECDH P-256 + HKDF-SHA256 + AES-256-GCM) est celui des navigateurs, pour
@@ -24,7 +24,8 @@ const INFO = Buffer.from('easyhelper/v1/frame', 'utf8');
 const FLAG_ENCRYPTED = 1;
 const FLAG_PLAIN = 0;
 
-// Reproduit la dérivation de clé de public/crypto.js
+// Reproduit la dérivation de clé de public/crypto.js (variante Node.js ;
+// identique dans les deux variantes)
 function deriveKey(shared, saltHex) {
   const salt = Buffer.from(saltHex || '', 'hex');
   return Buffer.from(hkdfSync('sha256', shared, salt, INFO, 32));

@@ -10,7 +10,7 @@ memory/
 et des données de session
 *.zip
 
-# Variante hébergement mutualisé
-hostinger-php/config.php
-hostinger-php/data/*
-!hostinger-php/data/.htaccess
+# Variante hébergement mutualisé (PHP)
+php-full/config.php
+php-full/data/*
+!php-full/data/.htaccess

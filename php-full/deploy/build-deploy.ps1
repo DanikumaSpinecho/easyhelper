@@ -1,6 +1,6 @@
 # Reconstruit la branche deploy-hostinger : sa racine contient les fichiers
-# de hostinger-php/ (jamais config.php ni le contenu de data/).
-# Usage : powershell -ExecutionPolicy Bypass -File hostinger-php/deploy/build-deploy.ps1
+# de php-full/ (jamais config.php ni le contenu de data/).
+# Usage : powershell -ExecutionPolicy Bypass -File php-full/deploy/build-deploy.ps1
 # Puis :   git push deploy deploy-hostinger:deploy-hostinger
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -16,7 +16,7 @@ if ($LASTEXITCODE -ne 0) { throw 'git worktree add a échoué' }
 # On vide le worktree (on garde le fichier .git) puis on copie les fichiers de l'app
 Get-ChildItem -Force $wt | Where-Object { $_.Name -ne '.git' } | Remove-Item -Recurse -Force
 
-$src = Join-Path $repo 'hostinger-php'
+$src = Join-Path $repo 'php-full'
 @('api.php','inc.php','cron.php','config.sample.php','.htaccess','index.html','tech.html','style.css','crypto.js','user.js','tech.js','README.md','DEPLOYMENT.md') | ForEach-Object {
   Copy-Item (Join-Path $src $_) (Join-Path $wt $_)
 }

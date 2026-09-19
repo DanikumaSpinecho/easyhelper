@@ -80,8 +80,9 @@ En résumé :
   limites de débit, en-têtes CSP/no-store/nosniff.
 
 Vérification possible sans faire confiance à la documentation :
-`node hostinger-php/test/crypto-interop.mjs` recalcule la clé des deux côtés et
-contrôle qu'une image altérée est bien rejetée.
+`node test/crypto-interop.mjs` (depuis la racine du dépôt) recalcule la clé des
+deux côtés, contrôle qu'une image altérée est rejetée et que `crypto.js` est
+identique dans les deux variantes.
 
 ## Configuration
 
@@ -92,7 +93,7 @@ fichier. En production, mettez `config.php` en permissions 600.
 ## Test local (optionnel, si PHP est installé sur votre machine)
 
 ```bash
-php -S 127.0.0.1:8080 -t hostinger-php
+php -S 127.0.0.1:8080 -t php-full
 # config.php local : tech_password = 'devpass123', fetch_wait_ms = 500
 # (le serveur intégré de PHP est mono-processus : un long-polling de 8 s
 #  bloquerait les envois d'images — d'où le fetch_wait_ms réduit en local)
@@ -101,7 +102,7 @@ php -S 127.0.0.1:8080 -t hostinger-php
 Dans un autre terminal :
 
 ```powershell
-$env:TEST_PASSWORD='***'; node hostinger-php/test/smoke.mjs
+$env:TEST_PASSWORD='***'; node php-full/test/smoke.mjs
 ```
 
 Le test couvre : création de session, connexion (bon/mauvais mot de passe),

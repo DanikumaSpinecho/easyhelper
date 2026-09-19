@@ -143,10 +143,10 @@ function testZoom(jsPath, label) {
 
 function testPages() {
   const pages = [
-    { file: 'hostinger-php/index.html', label: 'PHP index', wrench: true },
-    { file: 'public/index.html', label: 'Node index', wrench: true },
-    { file: 'hostinger-php/tech.html', label: 'PHP tech', wrench: false },
-    { file: 'public/tech.html', label: 'Node tech', wrench: false },
+    { file: 'php-full/index.html', label: 'PHP index', wrench: true },
+    { file: 'vps-node/public/index.html', label: 'Node index', wrench: true },
+    { file: 'php-full/tech.html', label: 'PHP tech', wrench: false },
+    { file: 'vps-node/public/tech.html', label: 'Node tech', wrench: false },
   ];
   for (const p of pages) {
     const html = readFileSync(new URL('../' + p.file, import.meta.url), 'utf8');
@@ -174,7 +174,7 @@ function testPages() {
 }
 
 function testStyles() {
-  for (const file of ['hostinger-php/style.css', 'public/style.css']) {
+  for (const file of ['php-full/style.css', 'vps-node/public/style.css']) {
     const css = readFileSync(new URL('../' + file, import.meta.url), 'utf8');
     // Sans cette règle, « a:visited » (spécificité supérieure) fait virer le
     // crédit au violet après un clic : rendu amateur et incohérent.
@@ -192,8 +192,8 @@ function testStyles() {
 }
 
 console.log('Interface technicien — vérification fonctionnelle');
-testZoom('hostinger-php/tech.js', 'variante PHP');
-testZoom('public/tech.js', 'variante Node');
+testZoom('php-full/tech.js', 'variante PHP');
+testZoom('vps-node/public/tech.js', 'variante Node');
 testPages();
 testStyles();
 console.log('OK — zoom, bannière d\'état, geste tactile et crédit discret conformes.');

@@ -40,10 +40,10 @@ déplacer.
 > **Deux variantes d'hébergement**
 >
 > - **Hébergement mutualisé** (OVH, Hostinger, o2switch…) — **sans VPS** :
->   voir [`hostinger-php/`](hostinger-php/). PHP pur, images relayées en HTTPS
+>   voir [`php-full/`](php-full/). PHP pur, images relayées en HTTPS
 >   (envoi + lecture en attente), fonctionne sur un espace web classique.
-> - **VPS / serveur dédié** : variante Node.js + WebSocket décrite ci-dessous
->   (2 à 4 images/s, meilleure latence).
+> - **VPS / serveur dédié** : voir [`vps-node/`](vps-node/). Node.js +
+>   WebSocket (2 à 4 images/s, meilleure latence).
 
 ## Compatibilité des navigateurs
 
@@ -60,9 +60,47 @@ technicien fonctionne parfaitement sur téléphone et tablette.
 Le partage exige une connexion **HTTPS** (contexte sécurisé), sauf en test
 local sur `localhost`.
 
+## Structure du dépôt
+
+Le dépôt contient **deux variantes** du même service, chacune dans son dossier,
+plus les tests qui les couvrent :
+
+```
+.
+├── php-full/          Variante « hébergement mutualisé » (PHP pur, sans VPS)
+│   ├── api.php, inc.php, cron.php, config.sample.php
+│   ├── index.html, tech.html, style.css, crypto.js, user.js, tech.js
+│   ├── deploy/        Script et hook de déploiement (git push)
+│   └── test/          smoke.mjs (bout en bout du relais PHP)
+├── vps-node/          Variante « VPS / serveur dédié » (Node.js + WebSocket)
+│   ├── server.js
+│   ├── public/        Pages et scripts servis aux navigateurs
+│   ├── scripts/       set-password.js
+│   ├── test/          ws-smoke.js (bout en bout du relais Node)
+│   └── package.json
+└── test/              Tests transverses aux deux variantes
+    ├── crypto-interop.mjs   chiffrement (les deux variantes)
+    ├── ui-zoom.mjs          interface : zoom, bannière, crédit
+    ├── zoom-frame.mjs       mesure du cadre de zoom dans un vrai navigateur
+    └── browser-e2e.mjs      parcours réel complet (vrai Chrome)
+```
+
+Les deux variantes partagent **le même `crypto.js`** (vérifié identique par
+`test/crypto-interop.mjs`) et la même interface : une personne aidée servie par
+une variante peut donc dialoguer avec un technicien connecté à l'autre.
+
+Choisissez :
+
+- **`php-full/`** — pas de VPS, un simple espace web mutualisé suffit
+  (Hostinger, OVH, o2switch…). PHP + HTTPS, relais par envoi/lecture sur
+  fichier temporaire.
+- **`vps-node/`** — VPS ou serveur dédié : Node.js + WebSocket, 2 à 4 images/s
+  et latence plus faible. Voir [`vps-node/DEPLOYMENT.md`](vps-node/DEPLOYMENT.md).
+
 ## Démarrage rapide (test local, variante Node.js)
 
 ```bash
+cd vps-node
 npm install
 npm run set-password -- votre-mot-de-passe   # ou sans argument : saisie interactive
 node server.js
@@ -234,8 +272,8 @@ qui n'a jamais quitté son navigateur.
 
 - `test/crypto-interop.mjs` — vérifie dans Node que le chiffrement correspond
   bien à ECDH P-256 + HKDF-SHA256 + AES-256-GCM, que deux parties
-  indépendantes obtiennent **la même clé**, et qu'une image altérée est
-  **rejetée**.
+  indépendantes obtiennent **la même clé**, qu'une image altérée est
+  **rejetée**, et que **les deux variantes publient le même `crypto.js`**.
 - `test/browser-e2e.mjs` — déroule un vrai partage d'écran dans un vrai
   navigateur : les images arrivent déchiffrées, et le trafic ne contient que
   des octets opaques.
@@ -281,13 +319,28 @@ occasionnel.
 
 ## Tests
 
-Un test de bout en bout sans navigateur valide le relais, l'authentification
-et le cycle de vie des sessions :
+Les tests transverses se lancent depuis la racine (`npm install` une fois) :
 
 ```bash
-node server.js   # dans un premier terminal
-$env:TEST_PASSWORD='<mot-de-passe>'; npm run smoke   # PowerShell, autre terminal
+npm run test-crypto       # chiffrement des deux variantes + interopérabilité
+npm run test-ui           # interface : zoom, bannière d'état, crédit discret
+npm run test-zoom-frame   # cadre de zoom mesuré dans un vrai navigateur
+npm run test-browser      # parcours réel complet dans un vrai Chrome
 ```
+
+Chaque variante a en plus son test de bout en bout sans navigateur :
+
+```bash
+# Relais Node.js — serveur lancé d'abord (cd vps-node && node server.js)
+$env:TEST_PASSWORD='<mot-de-passe>'; npm run smoke --prefix vps-node
+
+# Relais PHP — php -S 127.0.0.1:8080 -t php-full
+$env:TEST_PASSWORD='<mot-de-passe>'; node php-full/test/smoke.mjs
+```
+
+`BASE=https://…` fait tourner les tests `zoom-frame` et `browser` contre un
+site en production au lieu du serveur local : c'est la recette à passer avant
+d'annoncer une correction.
 
 ## Licence
 

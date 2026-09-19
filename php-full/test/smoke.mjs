@@ -1,7 +1,7 @@
 // Test de bout en bout du relais PHP (sans navigateur).
-// Local  : php -S 127.0.0.1:8080 -t hostinger-php   (PHP >= 7.4)
-//          $env:TEST_PASSWORD='***'; node hostinger-php/test/smoke.mjs
-// Déployé : $env:BASE='https://assistance.example.org'; $env:TEST_PASSWORD='***'; node hostinger-php/test/smoke.mjs
+// Local  : php -S 127.0.0.1:8080 -t php-full   (PHP >= 7.4)
+//          $env:TEST_PASSWORD='***'; node php-full/test/smoke.mjs
+// Déployé : $env:BASE='https://assistance.example.org'; $env:TEST_PASSWORD='***'; node php-full/test/smoke.mjs
 //
 // Couvre aussi le chiffrement de bout en bout : l'arbre de clés reproduit ici
 // (ECDH P-256 + HKDF-SHA256 + AES-256-GCM) est celui des navigateurs, pour

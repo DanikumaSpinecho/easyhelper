@@ -1,10 +1,15 @@
-// Test d'interopérabilité du chiffrement côté navigateur (public/crypto.js).
+// Test d'interopérabilité du chiffrement côté navigateur.
 //
 // Le fichier crypto.js est exécuté ici dans un bac à sable muni de l'API
 // WebCrypto de Node, puis confronté à une implémentation indépendante
 // (node:crypto). Cela prouve que le code réellement servi aux navigateurs
 // implémente bien l'ECDH P-256 + HKDF-SHA256 + AES-256-GCM standard, et que
 // les deux postes dérivent la même clé sans jamais la transmettre.
+//
+// Les deux variantes sont testées : php-full/crypto.js (hébergement mutualisé)
+// et vps-node/public/crypto.js (VPS). Leur contenu doit rester identique —
+// deux implémentations qui divergeraient casseraient l'interopérabilité entre
+// une personne aidée servie par une variante et un technicien par l'autre.
 //
 // Usage : node test/crypto-interop.mjs
 
@@ -13,15 +18,18 @@ import { webcrypto } from 'node:crypto';
 import { createECDH, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-const SRC = readFileSync(new URL('../public/crypto.js', import.meta.url), 'utf8');
+const VARIANTES = [
+  { fichier: 'php-full/crypto.js', label: 'PHP mutualisé' },
+  { fichier: 'vps-node/public/crypto.js', label: 'Node.js / VPS' },
+];
 const INFO = Buffer.from('easyhelper/v1/frame', 'utf8');
 
 // Exécute crypto.js dans un contexte isolé (une « instance navigateur »).
-function newBrowserInstance() {
+function newBrowserInstance(source) {
   const win = { crypto: webcrypto };
   const factory = new Function(
     'window', 'crypto', 'btoa', 'atob', 'TextEncoder', 'Uint8Array',
-    SRC + '\nreturn window.EHCrypto;',
+    source + '\nreturn window.EHCrypto;',
   );
   return factory(
     win,
@@ -33,11 +41,12 @@ function newBrowserInstance() {
   );
 }
 
-async function main() {
-  const alice = newBrowserInstance();   // personne aidée
-  const bob = newBrowserInstance();     // technicien
-  assert.equal(alice.available, true, 'WebCrypto disponible');
-  assert.equal(bob.available, true, 'WebCrypto disponible');
+// Vérifie le chiffrement tel qu'il est publié dans une variante donnée.
+async function verifierVariante(source, label) {
+  const alice = newBrowserInstance(source);   // personne aidée
+  const bob = newBrowserInstance(source);     // technicien
+  assert.equal(alice.available, true, `[${label}] WebCrypto disponible`);
+  assert.equal(bob.available, true, `[${label}] WebCrypto disponible`);
 
   // 1. Échange de clés publiques éphémères
   const aPub = await alice.pubkey();
@@ -100,8 +109,25 @@ async function main() {
   assert.equal(await bob.decryptFrame(await alice.encryptFrame(message)), null,
     'un sel différent ne permet pas de déchiffrer (clés distinctes)');
 
-  console.log('OK — chiffrement navigateur conforme (ECDH P-256, HKDF-SHA256, AES-256-GCM), '
-    + 'interopérable et résistant à l\u2019altération.');
+  console.log(`  OK  ${label} : chiffrement conforme (ECDH P-256, HKDF-SHA256, AES-256-GCM)`);
+}
+
+async function main() {
+  // Les deux variantes doivent publier EXACTEMENT le même crypto.js : une
+  // divergence casserait l'interopérabilité entre une personne aidée servie
+  // par une variante et un technicien connecté à l'autre.
+  const sources = VARIANTES.map((v) => ({
+    ...v,
+    source: readFileSync(new URL('../' + v.fichier, import.meta.url), 'utf8'),
+  }));
+  assert.equal(sources[0].source, sources[1].source,
+    'les deux variantes doivent publier le même crypto.js');
+  console.log('  OK  crypto.js identique dans les deux variantes');
+
+  for (const v of sources) await verifierVariante(v.source, v.label);
+
+  console.log('OK — chiffrement navigateur conforme, interopérable, résistant à l\u2019altération\n'
+    + '     et identique dans les deux variantes (PHP mutualisé et Node.js).');
 }
 
 main().catch((e) => {

@@ -108,7 +108,7 @@ fait quand même automatiquement à chaque requête de l'API.
 Un dépôt git nu est installé sur le serveur, hors racine web :
 `/home/uXXXXXXXXX/repos/easyhelper.git`. Pousser la branche `deploy-hostinger`
 déploie automatiquement dans `public_html/support` (hook `post-receive`,
-source dans `hostinger-php/deploy/`).
+source dans `php-full/deploy/`).
 
 Les fichiers non suivis par git ne sont jamais touchés : `config.php`
 (mot de passe technicien) et `data/` (sessions en cours) restent en place.
@@ -116,6 +116,6 @@ Les fichiers non suivis par git ne sont jamais touchés : `config.php`
 Depuis le poste de développement :
 
 ```bash
-powershell -File hostinger-php/deploy/build-deploy.ps1   # reconstruit la branche
-git push deploy deploy-hostinger:deploy-hostinger        # déploie
+powershell -File php-full/deploy/build-deploy.ps1   # reconstruit la branche
+git push deploy deploy-hostinger:deploy-hostinger   # déploie
 ```

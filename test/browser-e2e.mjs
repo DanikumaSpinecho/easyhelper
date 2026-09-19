@@ -22,7 +22,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const SITE = path.join(ROOT, 'hostinger-php');
+const SITE = path.join(ROOT, 'php-full');
 const PORT = 8099;
 // BASE permet de viser un serveur déjà en ligne (production) plutôt que le
 // serveur PHP local : le même parcours réel sert alors de test de recette.
@@ -34,7 +34,7 @@ const DEBUG_PORT = 9333;
 const cfg = fs.readFileSync(path.join(SITE, 'config.php'), 'utf8');
 const PASSWORD = (cfg.match(/tech_password'\s*=>\s*'([^']+)'/) || [])[1];
 if (!PASSWORD) {
-  console.error('ÉCHEC : mot de passe technicien introuvable dans hostinger-php/config.php');
+  console.error('ÉCHEC : mot de passe technicien introuvable dans php-full/config.php');
   process.exit(2);
 }
 
