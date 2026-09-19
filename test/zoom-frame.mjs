@@ -21,7 +21,10 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SITE = path.join(ROOT, 'hostinger-php');
 const PORT = 8097;
-const ORIGIN = `http://127.0.0.1:${PORT}`;
+// BASE permet de mesurer le site réellement en ligne plutôt que le serveur
+// PHP local : le même contrôle sert alors de recette sur la production.
+const REMOTE = (process.env.BASE || '').replace(/\/+$/, '');
+const ORIGIN = REMOTE || `http://127.0.0.1:${PORT}`;
 const DEBUG_PORT = 9331;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -72,10 +75,14 @@ const profile = path.join(os.tmpdir(), 'easyhelper-zoom-' + Date.now());
 
 async function main() {
   assert.ok(browser, 'Chrome ou Edge introuvable');
-  assert.ok(php, 'PHP CLI introuvable');
 
-  phpProc = spawn(php, ['-S', `127.0.0.1:${PORT}`, '-t', SITE], { stdio: 'ignore' });
-  await sleep(1500);
+  if (REMOTE) {
+    console.log(`(site distant : ${ORIGIN})`);
+  } else {
+    assert.ok(php, 'PHP CLI introuvable');
+    phpProc = spawn(php, ['-S', `127.0.0.1:${PORT}`, '-t', SITE], { stdio: 'ignore' });
+    await sleep(1500);
+  }
   chromeProc = spawn(browser, [
     '--headless=new', `--remote-debugging-port=${DEBUG_PORT}`, `--user-data-dir=${profile}`,
     '--no-first-run', '--no-default-browser-check', '--window-size=1280,900', 'about:blank',
@@ -98,6 +105,21 @@ async function main() {
     if ((await page.eval('document.readyState').catch(() => '')) === 'complete') break;
   }
 
+  // Sur un site distant, la vérification de session répond plus lentement que
+  // sur un serveur local : elle masque la vue technicien PENDANT la mesure et
+  // fausserait le relevé (cadre à 0 px). On attend donc qu'elle soit stabilisée
+  // avant de mesurer. Sans cette attente, le test accuse à tort la mise en page.
+  for (let i = 0; i < 100; i++) {
+    const stabilise = await page.eval(`(() => {
+      const l = document.getElementById('login');
+      const c = document.getElementById('codeEntry');
+      return !l.classList.contains('hidden') || !c.classList.contains('hidden');
+    })()`).catch(() => false);
+    if (stabilise) break;
+    await sleep(150);
+  }
+  await sleep(300); // marge : laisse le dernier rendu se poser
+
   // Une image d'écran réaliste (800×500 comme la capture réelle). Toute la
   // mesure se fait dans UN SEUL appel : révéler la vue, charger l'image,
   // régler le zoom et mesurer. C'est indispensable car la page se masque
@@ -109,6 +131,11 @@ async function main() {
       const img = document.getElementById('screen');
       const box = document.getElementById('screenBox');
       document.getElementById('viewer').classList.remove('hidden');
+      await new Promise((r) => requestAnimationFrame(r));
+      if (box.getBoundingClientRect().width === 0) {
+        document.getElementById('viewer').classList.remove('hidden');
+        await new Promise((r) => requestAnimationFrame(r));
+      }
       if (!img.dataset.pret) {
         img.src = 'data:image/svg+xml,' + encodeURIComponent(
           '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500">' +
