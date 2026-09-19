@@ -4,7 +4,7 @@
 # Puis :   git push deploy deploy-hostinger:deploy-hostinger
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$wt = Join-Path $env:TEMP 'spinecho-deploy-tree'
+$wt = Join-Path $env:TEMP 'easyhelper-deploy-tree'
 
 # Nettoyage tolérant : suppression du dossier puis purge des worktrees orphelins
 if (Test-Path $wt) { Remove-Item $wt -Recurse -Force -ErrorAction SilentlyContinue }

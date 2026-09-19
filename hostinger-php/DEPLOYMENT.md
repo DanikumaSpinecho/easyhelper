@@ -18,12 +18,12 @@ Sur votre ordinateur :
 ## Étape 2 — Créer le sous-domaine
 
 hPanel → **Sites web** → votre domaine → **Sous-domaines** → créer
-`support.spinecho.fr` (document root créé automatiquement :
-`public_html/support.spinecho.fr`).
+`assistance.example.org` (document root créé automatiquement :
+`public_html/assistance.example.org`).
 
 > Pas de sous-domaine disponible sur votre plan ? Mettez le dossier dans
 > `public_html/support` : le service sera alors accessible sur
-> `https://spinecho.fr/support/` (les liens des pages sont relatifs, tout
+> `https://example.org/support/` (les liens des pages sont relatifs, tout
 > fonctionne).
 
 ## Étape 3 — Envoyer les fichiers
@@ -47,14 +47,14 @@ Méthodes possibles :
 
 1. hPanel → Gestionnaire de fichiers → `config.php` → Permissions → `0600`.
 2. hPanel → **Sécurité** → **SSL** : installer le certificat gratuit
-   (Let's Encrypt) pour `support.spinecho.fr` et forcer HTTPS.
+   (Let's Encrypt) pour `assistance.example.org` et forcer HTTPS.
 
 ## Étape 5 — Vérifier
 
 Ouvrez :
 
 ```
-https://support.spinecho.fr/api.php?action=selftest
+https://assistance.example.org/api.php?action=selftest
 ```
 
 Vous devez obtenir un JSON avec :
@@ -70,7 +70,7 @@ crée s'il est absent — aucun réglage nécessaire).
 hPanel → **Avancé** → **Tâches cron** → nouvelle tâche, toutes les **5 min** :
 
 ```
-php /home/uXXXXXXXXX/domains/spinecho.fr/public_html/support.spinecho.fr/cron.php
+php /home/uXXXXXXXXX/domains/example.org/public_html/assistance.example.org/cron.php
 ```
 
 (adaptez le chemin — il est affiché dans hPanel). Sans cron, le nettoyage se
@@ -78,9 +78,9 @@ fait quand même automatiquement à chaque requête de l'API.
 
 ## Étape 7 — Test réel
 
-1. Ordinateur (personne aidée) : `https://support.spinecho.fr/` → Partager
+1. Ordinateur (personne aidée) : `https://assistance.example.org/` → Partager
    mon écran → code.
-2. Votre téléphone (technicien) : `https://support.spinecho.fr/tech.html` →
+2. Votre téléphone (technicien) : `https://assistance.example.org/tech.html` →
    mot de passe → code → l'écran apparaît.
 
 ## Cas particuliers
@@ -106,7 +106,7 @@ fait quand même automatiquement à chaque requête de l'API.
 ## Déploiement par git push (en place)
 
 Un dépôt git nu est installé sur le serveur, hors racine web :
-`/home/u930580536/repos/support.git`. Pousser la branche `deploy-hostinger`
+`/home/uXXXXXXXXX/repos/easyhelper.git`. Pousser la branche `deploy-hostinger`
 déploie automatiquement dans `public_html/support` (hook `post-receive`,
 source dans `hostinger-php/deploy/`).
 

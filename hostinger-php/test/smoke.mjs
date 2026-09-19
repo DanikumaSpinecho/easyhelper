@@ -1,7 +1,7 @@
 // Test de bout en bout du relais PHP (sans navigateur).
 // Local  : php -S 127.0.0.1:8080 -t hostinger-php   (PHP >= 7.4)
 //          $env:TEST_PASSWORD='***'; node hostinger-php/test/smoke.mjs
-// Déployé : $env:BASE='https://support.spinecho.fr'; $env:TEST_PASSWORD='***'; node hostinger-php/test/smoke.mjs
+// Déployé : $env:BASE='https://assistance.example.org'; $env:TEST_PASSWORD='***'; node hostinger-php/test/smoke.mjs
 
 import assert from 'node:assert/strict';
 

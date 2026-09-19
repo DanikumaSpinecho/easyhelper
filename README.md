@@ -1,48 +1,66 @@
-# Aide à distance — support.spinecho.fr
+# EasyHelper — assistance à distance par partage d'écran (lecture seule)
+
+EasyHelper permet à un technicien de **voir l'écran** d'une personne qu'il
+aide pendant quelques minutes, afin de la guider oralement. Rien à installer,
+aucune prise de contrôle, aucun enregistrement.
+
+Le cas d'usage visé : apporter rapidement une **assistance de confiance** à une
+personne peu à l'aise avec l'informatique — par exemple un soignant en milieu
+hospitalier qui doit retrouver un dossier, ouvrir une application métier ou
+connecter une imprimante, sans attendre qu'un service informatique puisse se
+déplacer.
+
+- **La personne aidée** ouvre une page web, clique sur **Partager mon écran**,
+  autorise le partage (fenêtre, onglet ou écran entier) et lit un code à voix
+  haute au téléphone.
+- **Le technicien** ouvre la page technicien, s'authentifie, saisit le code :
+  il voit l'écran en direct (1 à 3 images par seconde) le temps de
+  l'assistance.
+- La personne aidée arrête quand elle veut ; la session est immédiatement
+  détruite côté serveur.
+
+## Principes
+
+- **Consentement explicite** — c'est la personne aidée qui déclenche le
+  partage, avec l'autorisation native du navigateur, et son navigateur
+  l'indique en permanence pendant la session.
+- **Lecture seule** — aucun clic, aucune frappe, aucun contrôle à distance.
+- **Aucune installation** — un simple navigateur, côté personne aidée comme
+  côté technicien ; rien à déployer sur les postes de travail.
+- **Aucune conservation** — les images ne sont pas enregistrées : supprimées à
+  la fin de la session (10 min sans activité, 1 h au maximum).
+- **Transparence réseau** — le service n'utilise que du **HTTPS standard
+  (port 443)**, exactement comme n'importe quel site web consulté depuis le
+  poste. Aucun port exotique, aucun logiciel à installer côté poste, aucune
+  modification de configuration réseau, aucun accès entrant vers le poste de
+  la personne aidée. Il s'intègre donc naturellement dans les environnements
+  les plus encadrés — et il reste légitime : il n'ouvre aucun accès et ne
+  contourne aucun contrôle.
 
 > **Deux variantes d'hébergement**
 >
-> - **Hébergement mutualisé (Hostinger, OVH…) — sans VPS** : voir
->   [`hostinger-php/`](hostinger-php/) — PHP pur, images envoyées par HTTPS
->   (upload + long-polling), fonctionne sur votre espace web actuel.
-> - **VPS** : la variante Node.js + WebSocket décrite dans ce README.
-
-Partage d'écran ponctuel « vue seule » entre un proche (la personne aidée) et
-vous (le technicien). **Aucun logiciel à installer, aucune prise de contrôle,
-aucun enregistrement** : les images ne transitent qu'en mémoire pendant la
-session, puis sont immédiatement supprimées.
-
-## Comment ça marche
-
-1. La personne aidée ouvre **https://support.spinecho.fr**, clique sur
-   **Partager mon écran**. Le navigateur demande son autorisation explicite
-   (choix de l'écran/onglet/fenêtre), puis affiche un **code à 6 chiffres**
-   et un bandeau rouge « Partage en cours ».
-2. Elle vous communique le code (par téléphone, par exemple).
-3. Vous ouvrez **https://support.spinecho.fr/tech.html**, vous vous connectez
-   avec votre mot de passe, vous saisissez le code : vous voyez son écran en
-   direct (2 à 4 images par seconde). Vous la guidez oralement — vous ne
-   pouvez ni cliquer ni taper à sa place.
-4. Elle arrête le partage à tout moment avec **Arrêter le partage** (ou en
-   fermant l'onglet). La session est immédiatement détruite côté serveur.
+> - **Hébergement mutualisé** (OVH, Hostinger, o2switch…) — **sans VPS** :
+>   voir [`hostinger-php/`](hostinger-php/). PHP pur, images relayées en HTTPS
+>   (envoi + lecture en attente), fonctionne sur un espace web classique.
+> - **VPS / serveur dédié** : variante Node.js + WebSocket décrite ci-dessous
+>   (2 à 4 images/s, meilleure latence).
 
 ## Compatibilité des navigateurs
 
-| Usage | Chrome / Edge (ordinateur) | Firefox (ordinateur) | Safari (macOS) | Android (Chrome / Firefox) | iPhone / iPad |
+| Usage | Chrome / Edge (ordinateur) | Firefox (ordinateur) | Safari (macOS) | Android | iPhone / iPad |
 |---|---|---|---|---|---|
 | Partager (personne aidée) | ✅ | ✅ (66+) | ✅ (13+) | ❌ | ❌ |
 | Consulter (technicien) | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-Les navigateurs mobiles ne permettent **pas** le partage d'écran (l'API
-`getDisplayMedia` est absente sur Android et iOS : Google et Mozilla l'ont
-retirée, Apple ne l'a jamais activée). La page l'explique clairement au lieu
-d'afficher une erreur technique. En revanche, la **consultation** côté
+Les navigateurs mobiles ne permettent **pas** le partage d'écran : l'API
+`getDisplayMedia` est absente sur Android et iOS. La page l'explique
+clairement au lieu d'afficher une erreur technique. La **consultation** côté
 technicien fonctionne parfaitement sur téléphone et tablette.
 
 Le partage exige une connexion **HTTPS** (contexte sécurisé), sauf en test
 local sur `localhost`.
 
-## Démarrage rapide (test local)
+## Démarrage rapide (test local, variante Node.js)
 
 ```bash
 npm install
@@ -58,64 +76,65 @@ Puis :
 Ouvrez-les dans deux navigateurs différents (ou un onglet normal + un onglet
 privé), partagez sur le premier, entrez le code sur le second.
 
-Pour les tests en HTTP (donc sans HTTPS), le cookie `Secure` empêche la
-connexion du technicien : passez `cookieSecure` à `false` dans `config.json`
-**uniquement pour tester en local**.
+Pour tester en HTTP (donc sans HTTPS), le cookie `Secure` empêche la connexion
+du technicien : passez `cookieSecure` à `false` dans `config.json`
+**uniquement pour un test local**.
 
-## Architecture
+## Architecture (variante Node.js)
 
 Tout passe par le serveur, en HTTPS/WSS sur le port 443 (via un reverse
 proxy). **Aucune connexion entrante** n'est requise vers le poste de la
 personne aidée : seul le navigateur se connecte en sortant, ce qui fonctionne
 derrière les NAT, les proxys d'entreprise, les hôtels et la 4G/5G — partout où
-HTTPS passe. Aucun port UDP, aucun TURN/STUN, aucun mécanisme de contournement
-de pare-feu : c'est un simple trafic HTTPS/WSS standard.
+le web passe.
 
 ```
-Personne aidée (navigateur)            support.spinecho.fr                 Technicien (navigateur)
+Personne aidée (navigateur)              serveur EasyHelper               Technicien (navigateur)
 ┌──────────────────────────┐         ┌─────────────────────┐              ┌──────────────────────┐
 │ getDisplayMedia          │  JPEG   │  relais Node.js     │   JPEG       │  <img> live          │
-│ + canvas JPEG 2–4 img/s  │ ──────► │  (en mémoire,       │ ──────►      │  (lecture seule)     │
+│ + canvas JPEG 2–4 img/s  │ ──────► │  (en mémoire,       │   ──────►    │  (lecture seule)     │
 └──────────────────────────┘   WSS   │  rien sur disque)   │    WSS       └──────────────────────┘
                                      └─────────────────────┘
 ```
 
 - La personne aidée capture son écran via l'API standard `getDisplayMedia`
   (autorisation explicite, indicateur natif de partage du navigateur). Les
-  images sont réduites à 1280 px de large, compressées en JPEG avec qualité
-  adaptative (~60–150 Ko), envoyées à ~3 images/s.
-- Le serveur **ne stocke rien** : il relaye en mémoire et détruit la session à
+  images sont réduites à 1280 px de large, compressées en JPEG avec une
+  qualité adaptative (~60–150 Ko), envoyées à ~3 images/s.
+- Le serveur **ne stocke rien** : il relaie en mémoire et détruit la session à
   la fin. Une session se termine automatiquement après 10 min sans image ou
   1 h au total (réglable).
 - Le technicien est authentifié par mot de passe (cookie HttpOnly,
-  SameSite=Strict, Secure) **et** doit connaître le code à 6 chiffres.
+  SameSite=Strict, Secure) **et** doit connaître le code de session.
 
-Ce choix (relais WebSocket de captures JPEG plutôt que WebRTC P2P) est celui
-qui maximise la compatibilité réseau : WebRTC exige un serveur TURN pour
-traverser la plupart des NAT et échoue sur les réseaux qui bloquent l'UDP.
+Le relais d'images JPEG (plutôt que du WebRTC pair-à-pair) est le choix qui
+maximise la compatibilité réseau : WebRTC exige un serveur TURN pour traverser
+la plupart des NAT et échoue sur les réseaux qui filtrent l'UDP.
 
 ## Sécurité
 
-- **Authentification du technicien** : mot de passe haché scrypt, cookie
+- **Authentification du technicien** — mot de passe haché scrypt, cookie
   HttpOnly / SameSite=Strict / Secure, limitation des tentatives par IP
   (10 par 15 min).
-- **Sessions temporaires** : code à 6 chiffres + jeton utilisateur de 256 bits
-  (envoyé en premier message WebSocket, jamais dans les URL ni les journaux).
-- **Séparation des rôles** : le canal utilisateur ne fait qu'envoyer ; le
-  canal technicien ne fait que recevoir. Aucun message de contrôle n'existe.
-- **Limites** : 256 Ko/image max, 5 images/s max, ~768 Ko/s max par session,
-  20 sessions simultanées (3 par IP), 12 connexions WebSocket par IP.
-- **Expiration automatique** : inactivité 10 min, durée totale 1 h, session
+- **Sessions temporaires** — code de session + jeton utilisateur de 256 bits
+  (envoyé en en-tête ou en premier message, jamais dans l'URL ni les journaux).
+- **Séparation des rôles** — le canal « personne aidée » ne fait qu'envoyer ;
+  le canal « technicien » ne fait que recevoir. Aucun message de contrôle.
+- **Limites** — taille et cadence des images, nombre de sessions par IP,
+  débit maximal par session.
+- **Expiration automatique** — inactivité 10 min, durée totale 1 h, session
   technicien 12 h.
-- **Aucune conservation** : aucune image écrite sur disque, tampons libérés à
-  la fermeture. Journaux minimaux : début/fin de session (code, horodatage,
-  durée, motif) — jamais d'image ni d'IP.
-- **Anti-abus / anti-DoS** : vérification de l'en-tête `Origin` sur les
-  WebSockets (anti *cross-site WebSocket hijacking*), limites de débit et de
-  taille ci-dessus, en-têtes CSP, X-Frame-Options DENY, nosniff,
-  Referrer-Policy.
+- **Aucune conservation** — journaux minimaux (début/fin de session :
+  horodatage, durée, motif) ; jamais d'image ni d'IP.
+- **Anti-abus** — vérification de l'en-tête `Origin` sur les WebSockets
+  (anti *cross-site WebSocket hijacking*), limites de débit et de taille,
+  en-têtes CSP, X-Frame-Options DENY, nosniff, Referrer-Policy.
 
-## Configuration
+**Objectif de sécurité (feuille de route)** : chiffrement de bout en bout des
+images, afin qu'un tiers ne puisse pas les exploiter — y compris un tiers ayant
+accès au serveur ou à son disque. La clé reste dans les deux navigateurs.
+
+## Configuration (variante Node.js)
 
 `config.json` est créé au premier démarrage. Options principales :
 
@@ -136,12 +155,12 @@ traverser la plupart des NAT et échoue sur les réseaux qui bloquent l'UDP.
 
 ## Bande passante
 
-≈ 2–3 Mbit/s en émission côté personne aidée (1280 px, ~3 images/s). En cas
-de connexion faible, la qualité JPEG baisse automatiquement. Côté serveur,
-seule la bande passante de relais est consommée : très léger pour un usage
-familial occasionnel.
+≈ 2–3 Mbit/s en émission côté personne aidée (1280 px, ~3 images/s). En cas de
+connexion faible, la qualité JPEG baisse automatiquement. Côté serveur, seule
+la bande passante de relais est consommée : très léger pour un usage
+occasionnel.
 
-## Limites connues (v1)
+## Limites connues
 
 - Pas d'audio (la conversation se fait par téléphone — c'est le scénario visé).
 - Pas de partage d'écran depuis les navigateurs mobiles (limite des
@@ -149,17 +168,7 @@ familial occasionnel.
   fonctionne.
 - Le redémarrage du serveur coupe les sessions en cours et déconnecte le
   technicien (par conception : tout est volatil).
-- Pas de repli « HTTP POST » si un réseau bloquait même les WebSockets sur
-  443 — un tel réseau bloque alors quasiment tout HTTPS ; extension possible
-  si le besoin apparaît.
-
-## Pistes d'évolution (volontairement non incluses)
-
-- WebRTC direct (P2P) quand les deux côtés sont sur le même réseau local,
-  pour économiser la bande passante du serveur (nécessite un TURN dans les
-  autres cas — raison de son absence en v1).
-- Plusieurs techniciens simultanés, petite page de statistiques, capture de
-  l'audio système, adaptation automatique de la cadence selon la latence.
+- Pas d'enregistrement de session, ni côté personne aidée ni côté technicien.
 
 ## Tests
 
@@ -170,3 +179,20 @@ et le cycle de vie des sessions :
 node server.js   # dans un premier terminal
 $env:TEST_PASSWORD='<mot-de-passe>'; npm run smoke   # PowerShell, autre terminal
 ```
+
+## Licence
+
+Copyright (C) 2026 EasyHelper contributors.
+
+Ce programme est un logiciel libre : vous pouvez le redistribuer et/ou le
+modifier selon les termes de la **GNU General Public License** telle que
+publiée par la Free Software Foundation, version 3 de la licence (ou, à votre
+convenance, toute version ultérieure).
+
+Ce programme est distribué dans l'espoir qu'il sera utile, mais **sans aucune
+garantie**. Voir le fichier [LICENSE](LICENSE) pour le texte complet.
+
+Ce logiciel n'est **pas un dispositif médical** et ne fait l'objet d'aucune
+certification. Il vise un niveau d'exigence élevé en matière de
+confidentialité, au même titre que les outils utilisés en environnement de
+soins.

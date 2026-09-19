@@ -1,5 +1,5 @@
 /**
- * spinecho-support — relais de partage d'écran « vue seule »
+ * easyhelper — relais de partage d'écran « vue seule »
  * -----------------------------------------------------------
  * La personne aidée partage son écran (getDisplayMedia + captures JPEG) ;
  * le technicien le regarde en direct. Aucune prise de contrôle possible,
@@ -475,7 +475,7 @@ setInterval(() => {
 }, 600000);
 
 server.listen(config.port, config.host, () => {
-  console.log(`[start] spinecho-support écoute sur http://${config.host}:${config.port}`);
+  console.log(`[start] easyhelper écoute sur http://${config.host}:${config.port}`);
   if (!config.techPasswordHash) {
     console.log('[config] ⚠ Aucun mot de passe technicien défini :  npm run set-password -- <mot-de-passe>');
   }

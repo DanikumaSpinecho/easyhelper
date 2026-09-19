@@ -1,4 +1,4 @@
-# spinecho-support — hébergement mutualisé (LiteSpeed/Apache)
+# easyhelper — hébergement mutualisé (LiteSpeed/Apache)
 
 # Pas de cache sur les pages et l'API : le relais doit rester temps réel
 <IfModule mod_headers.c>

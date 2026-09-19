@@ -1,8 +1,8 @@
 #!/bin/sh
-# Hook post-receive du dépôt nu /home/u930580536/repos/support.git
+# Hook post-receive du dépôt nu /home/uXXXXXXXXX/repos/easyhelper.git
 # Déploie la branche deploy-hostinger dans le dossier public du site.
 # config.php et data/ (non suivis par git) ne sont jamais touchés.
-TARGET=/home/u930580536/domains/spinecho.fr/public_html/support
+TARGET=/home/uXXXXXXXXX/domains/example.org/public_html/support
 while read oldrev newrev refname
 do
   if [ "$refname" = "refs/heads/deploy-hostinger" ]; then

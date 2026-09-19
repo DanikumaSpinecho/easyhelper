@@ -1,6 +1,6 @@
 <?php
 /**
- * spinecho-support — API du relais de partage d'écran « vue seule »
+ * easyhelper — API du relais de partage d'écran « vue seule »
  * Variante hébergement mutualisé (Hostinger) : PHP pur, sans Node.js ni WebSocket.
  *
  * Actions (paramètre ?action=…) :

@@ -3,6 +3,9 @@ config.json
 *.log
 .DS_Store
 
+# Notes internes de l'agent (ne jamais publier)
+memory/
+
 # Ne jamais versionner d'archives : elles peuvent contenir config.php (mot de passe)
 et des données de session
 *.zip

@@ -1,4 +1,4 @@
-# Déploiement sur support.spinecho.fr
+# Déploiement sur assistance.example.org
 
 > **Vous êtes sur un hébergement mutualisé Hostinger (pas de VPS) ?**
 > Suivez plutôt [`hostinger-php/DEPLOYMENT.md`](hostinger-php/DEPLOYMENT.md) —
@@ -7,8 +7,8 @@
 ## Prérequis
 
 - Un VPS (Debian 12 / Ubuntu 24.04 conseillés, 1 vCPU / 1 Go suffisent).
-- Le domaine spinecho.fr avec un enregistrement DNS
-  `A support.spinecho.fr → <IP du VPS>`.
+- Le domaine example.org avec un enregistrement DNS
+  `A assistance.example.org → <IP du VPS>`.
 - Ports **80 et 443** ouverts vers le serveur. Le port 3080 reste fermé :
   Node n'écoute que sur 127.0.0.1.
 
@@ -23,13 +23,13 @@ node --version   # v22.x attendu
 ## 2. Installer l'application
 
 ```bash
-sudo useradd -r -m -s /usr/sbin/nologin spinecho
-sudo mkdir -p /opt/spinecho-support
-sudo chown spinecho:spinecho /opt/spinecho-support
+sudo useradd -r -m -s /usr/sbin/nologin easyhelper
+sudo mkdir -p /opt/easyhelper
+sudo chown easyhelper:easyhelper /opt/easyhelper
 # copier les fichiers (git clone ou scp depuis votre poste), puis :
-cd /opt/spinecho-support
-sudo -u spinecho npm install --omit=dev
-sudo -u spinecho node scripts/set-password.js
+cd /opt/easyhelper
+sudo -u easyhelper npm install --omit=dev
+sudo -u easyhelper node scripts/set-password.js
 #    -> saisir le mot de passe technicien (min. 8 caractères)
 ```
 
@@ -37,32 +37,32 @@ Le fichier `config.json` contient le haché du mot de passe : restreignez sa
 lecture au service uniquement.
 
 ```bash
-sudo chmod 600 /opt/spinecho-support/config.json
+sudo chmod 600 /opt/easyhelper/config.json
 ```
 
 ## 3. Test rapide sans HTTPS
 
 ```bash
-cd /opt/spinecho-support
-sudo -u spinecho node server.js    # Ctrl+C pour arrêter
+cd /opt/easyhelper
+sudo -u easyhelper node server.js    # Ctrl+C pour arrêter
 curl -s http://127.0.0.1:3080/ | head
 curl -s -X POST http://127.0.0.1:3080/api/session
 ```
 
 ## 4. Service systemd
 
-Créez `/etc/systemd/system/spinecho-support.service` :
+Créez `/etc/systemd/system/easyhelper.service` :
 
 ```ini
 [Unit]
-Description=Spinecho support (relais de partage d'écran)
+Description=EasyHelper support (relais de partage d'écran)
 After=network.target
 
 [Service]
 Type=simple
-User=spinecho
-Group=spinecho
-WorkingDirectory=/opt/spinecho-support
+User=easyhelper
+Group=easyhelper
+WorkingDirectory=/opt/easyhelper
 ExecStart=/usr/bin/node server.js
 Restart=on-failure
 RestartSec=3
@@ -76,8 +76,8 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now spinecho-support
-sudo systemctl status spinecho-support
+sudo systemctl enable --now easyhelper
+sudo systemctl status easyhelper
 ```
 
 ## 5. HTTPS avec Caddy (recommandé)
@@ -95,7 +95,7 @@ sudo apt-get update && sudo apt-get install -y caddy
 `/etc/caddy/Caddyfile` :
 
 ```
-support.spinecho.fr {
+assistance.example.org {
     encode gzip
     reverse_proxy 127.0.0.1:3080
 }
@@ -125,14 +125,14 @@ Le port 3080 n'est jamais exposé publiquement.
 ## 7. Vérifications finales
 
 ```bash
-curl -sI https://support.spinecho.fr/ | head -5            # page utilisateur
-curl -s -X POST https://support.spinecho.fr/api/session    # création de session
-curl -sI https://support.spinecho.fr/tech.html | head -5   # page technicien
+curl -sI https://assistance.example.org/ | head -5            # page utilisateur
+curl -s -X POST https://assistance.example.org/api/session    # création de session
+curl -sI https://assistance.example.org/tech.html | head -5   # page technicien
 ```
 
 Puis test réel : partagez depuis un ordinateur sur
-https://support.spinecho.fr, et consultez l'écran depuis votre téléphone sur
-https://support.spinecho.fr/tech.html.
+https://assistance.example.org, et consultez l'écran depuis votre téléphone sur
+https://assistance.example.org/tech.html.
 
 ## Supervision et journaux
 
@@ -140,7 +140,7 @@ Les journaux sont minimaux (début/fin de session : code, horodatage, durée,
 motif — pas d'IP ni d'image) :
 
 ```bash
-journalctl -u spinecho-support -f
+journalctl -u easyhelper -f
 journalctl -u caddy -f   # journaux d'accès du reverse proxy
 ```
 
@@ -149,17 +149,17 @@ journalctl -u caddy -f   # journaux d'accès du reverse proxy
 Sauvegardez `config.json` (contient le haché du mot de passe).
 
 ```bash
-sudo -u spinecho node /opt/spinecho-support/scripts/set-password.js
-sudo systemctl restart spinecho-support
+sudo -u easyhelper node /opt/easyhelper/scripts/set-password.js
+sudo systemctl restart easyhelper
 ```
 
 ## Mise à jour
 
 ```bash
-cd /opt/spinecho-support
-sudo -u spinecho git pull          # ou re-copier les fichiers
-sudo -u spinecho npm install --omit=dev
-sudo systemctl restart spinecho-support
+cd /opt/easyhelper
+sudo -u easyhelper git pull          # ou re-copier les fichiers
+sudo -u easyhelper npm install --omit=dev
+sudo systemctl restart easyhelper
 ```
 
 ## Points d'attention

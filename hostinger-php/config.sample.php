@@ -1,6 +1,6 @@
 <?php
 // ---------------------------------------------------------------------------
-// spinecho-support — configuration
+// easyhelper — configuration
 // Copiez ce fichier vers config.php, puis remplissez.
 // Comme pour wp-config.php, ce fichier est exécuté côté serveur : il n'est
 // jamais renvoyé tel quel aux visiteurs. Ne le publiez jamais (pas de dépôt

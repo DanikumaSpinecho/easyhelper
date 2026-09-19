@@ -41,7 +41,7 @@
     show($('unsupported'));
     let msg;
     if (!window.isSecureContext) {
-      msg = 'Cette page doit être ouverte en HTTPS (https://support.spinecho.fr).\nVotre navigateur bloque le partage d\u2019écran sur une connexion non sécurisée.';
+      msg = 'Cette page doit être ouverte en HTTPS (' + location.origin + ').\nVotre navigateur bloque le partage d\u2019écran sur une connexion non sécurisée.';
     } else {
       msg = 'Votre navigateur ne permet pas le partage d\u2019écran sur cet appareil.\n\n'
         + '• Ordinateur : utilisez Chrome, Edge, Firefox ou Safari (macOS).\n'
@@ -60,7 +60,7 @@
     ctx = null;
     sessionInfo = null;
     peerNote.textContent = '';
-    document.title = 'Aide à distance · support.spinecho.fr';
+    document.title = 'Aide à distance · ' + location.host;
     hide(sharing);
     show(intro);
   }

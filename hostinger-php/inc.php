@@ -1,6 +1,6 @@
 <?php
 /**
- * spinecho-support — relais PHP pour hébergement mutualisé (Hostinger, etc.)
+ * easyhelper — relais PHP pour hébergement mutualisé (Hostinger, etc.)
  * Fonctions partagées entre api.php et cron.php.
  * Rien n'est enregistré durablement : les images sont des fichiers
  * temporaires supprimés à la fin de chaque session.
