@@ -22,6 +22,11 @@
   const codeInput = $('code');
   const joinStatus = $('joinStatus');
   const screenImg = $('screen');
+  const screenBox = $('screenBox');
+  const zoomInBtn = $('zoomIn');
+  const zoomOutBtn = $('zoomOut');
+  const zoomFitBtn = $('zoomFit');
+  const zoomLabel = $('zoomLabel');
   const viewerStatus = $('viewerStatus');
   const closeBtn = $('closeBtn');
   const logoutBtn = $('logoutBtn');
@@ -30,6 +35,14 @@
   let objectUrl = null;
   let endMsg = null;
   let encryptedSession = false;
+
+  // Zoom de la vue (100 % = ajusté à la largeur). L'image zoomée défile dans
+  // le cadre : la page n'est jamais étirée.
+  const ZOOM_MIN = 100;
+  const ZOOM_MAX = 500;
+  const ZOOM_STEP = 25;
+  const ZOOM_FIT = 100;
+  let zoom = ZOOM_FIT;
 
   async function refreshAuth() {
     let authed = false;
@@ -47,6 +60,7 @@
     if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
     endMsg = null;
     encryptedSession = false;
+    setZoom(ZOOM_FIT);
     hide(viewer);
     if (backToCode) show(codeCard);
   }
@@ -188,6 +202,24 @@
     objectUrl = url;
   }
 
+  // Largeur de l'image exprimée en pourcentage du cadre : 100 % l'ajuste, les
+  // valeurs supérieures agrandissent et font apparaître les barres de défilement.
+  function applyZoom() {
+    screenImg.style.width = zoom + '%';
+    zoomLabel.textContent = zoom + ' %';
+    zoomOutBtn.disabled = zoom <= ZOOM_MIN;
+    zoomInBtn.disabled = zoom >= ZOOM_MAX;
+  }
+
+  function setZoom(next) {
+    zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next));
+    applyZoom();
+  }
+
+  zoomInBtn.addEventListener('click', () => setZoom(zoom + ZOOM_STEP));
+  zoomOutBtn.addEventListener('click', () => setZoom(zoom - ZOOM_STEP));
+  zoomFitBtn.addEventListener('click', () => { setZoom(ZOOM_FIT); screenBox.scrollTo(0, 0); });
+
   closeBtn.addEventListener('click', () => closeViewer());
   logoutBtn.addEventListener('click', async () => {
     try { await fetch(API + '?action=logout', { method: 'POST' }); } catch { /* ignore */ }
@@ -199,5 +231,6 @@
   const m = location.hash.match(/code=(\d{6})/);
   if (m) codeInput.value = m[1];
 
+  applyZoom();
   refreshAuth();
 })();

@@ -83,15 +83,31 @@ input:focus { outline: 2px solid #2563eb; }
 .screen {
   background: #000;
   border-radius: 10px;
-  overflow: hidden;
-  margin: 0 0 16px;
+  overflow: auto;          /* le zoom peut dépasser le cadre : on fait défiler */
+  max-height: 70vh;        /* une image zoomée n'étire pas la page indéfiniment */
+  margin: 0 0 12px;
   min-height: 180px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
-.screen img { display: block; width: 100%; height: auto; }
+.screen img { display: block; width: 100%; height: auto; margin: 0 auto; }
+.zoomBar { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.zoomBtn { padding: 8px 14px; font-size: 1rem; line-height: 1; }
+.zoomBtn:disabled { opacity: .4; cursor: default; }
+.zoomLabel { min-width: 3.6em; text-align: center; font-variant-numeric: tabular-nums; }
 footer { color: #64748b; font-size: .85rem; text-align: center; margin-top: 24px; }
+footer .legal { margin: 0; }
+.credit { margin: 12px 0 0; display: flex; align-items: center; justify-content: center; gap: 12px; }
+.creditLink, .techLink {
+  color: #475569;                 /* discret : proche de la couleur du fond */
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.creditLink { font-size: .78rem; }
+.creditLink:hover, .techLink:hover { color: #94a3b8; }
+.ghIcon { opacity: .85; }
+.techLink { opacity: .5; }
+.techLink:hover { opacity: 1; }
 .unsupported h2 { color: #fbbf24; font-size: 1.15rem; margin-top: 0; }
 .unsupported p { white-space: pre-line; line-height: 1.6; }
 .noscript { text-align: center; color: #94a3b8; }

@@ -11,7 +11,8 @@
     "start": "node server.js",
     "set-password": "node scripts/set-password.js",
     "smoke": "node test/ws-smoke.js",
-    "test-crypto": "node test/crypto-interop.mjs"
+    "test-crypto": "node test/crypto-interop.mjs",
+    "test-ui": "node test/ui-zoom.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"
