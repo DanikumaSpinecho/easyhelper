@@ -89,8 +89,18 @@
     // 1. Autorisation de capture d'abord (exige un geste utilisateur).
     let ds;
     try {
+      // Choix réduit à l'écran : « displaySurface: 'monitor' » supprime les
+      // options « onglet » et « fenêtre » de la boîte de dialogue sur Chrome —
+      // la personne aidée n'a plus qu'à valider l'écran proposé. Valeur simple
+      // (sémantique « ideal », pas « exact ») : un navigateur qui ne connaît
+      // pas ces contraintes les ignore au lieu de faire échouer le partage.
       ds = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: 3, max: 5 } },
+        video: {
+          frameRate: { ideal: 3, max: 5 },
+          displaySurface: 'monitor',
+          surfaceSwitching: 'exclude',
+          selfBrowserSurface: 'exclude',
+        },
         audio: false,
       });
     } catch (err) {
