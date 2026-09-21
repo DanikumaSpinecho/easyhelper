@@ -17,7 +17,7 @@ if ($LASTEXITCODE -ne 0) { throw 'git worktree add a échoué' }
 Get-ChildItem -Force $wt | Where-Object { $_.Name -ne '.git' } | Remove-Item -Recurse -Force
 
 $src = Join-Path $repo 'php-full'
-@('api.php','inc.php','cron.php','config.sample.php','.htaccess','index.html','tech.html','style.css','crypto.js','user.js','tech.js','README.md','DEPLOYMENT.md') | ForEach-Object {
+@('api.php','inc.php','cron.php','config.sample.php','.htaccess','index.html','tech.html','style.css','crypto.js','user.js','tech.js','robots.txt','sitemap.xml','README.md','DEPLOYMENT.md') | ForEach-Object {
   Copy-Item (Join-Path $src $_) (Join-Path $wt $_)
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $wt 'data') | Out-Null

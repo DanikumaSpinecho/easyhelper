@@ -1,0 +1,12 @@
+# EasyHelper — indexation du portail uniquement.
+# Les pages fonctionnelles et les données restent hors index.
+User-agent: *
+Allow: /
+Disallow: /api.php
+Disallow: /data/
+Disallow: /tech.html
+Disallow: /config.php
+Disallow: /config.sample.php
+Disallow: /cron.php
+
+Sitemap: https://support.spinecho.fr/sitemap.xml

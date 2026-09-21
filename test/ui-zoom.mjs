@@ -16,6 +16,8 @@ const IDS = [
   'codeForm', 'code', 'joinStatus', 'screen', 'screenBox', 'zoomIn',
   'zoomOut', 'zoomFit', 'zoomLabel', 'viewerStatus', 'closeBtn', 'logoutBtn',
   'liveBanner', 'liveBannerText',
+  'badgeHttps', 'badgeE2ee', 'badgeConn', 'sysInfo',
+  'diagOs', 'diagBrowser', 'diagRam', 'diagCores', 'diagScreen', 'diagLang', 'diagNet', 'diagSecure',
 ];
 
 function makeEl(id) {
@@ -80,6 +82,12 @@ function testZoom(jsPath, label) {
 
   const banner = els.get('liveBanner');
   const bannerText = els.get('liveBannerText');
+
+  // Les bandeaux d'état sont initialisés dès le chargement : le transport
+  // HTTPS/HTTP est connu immédiatement, les autres attendent la session.
+  const badgeHttps = els.get('badgeHttps');
+  assert.match(badgeHttps.textContent, /HTTPS|HTTP/, `[${label}] bandeau de transport initialisé`);
+  assert.match(badgeHttps.className, /badge/, `[${label}] bandeau de transport stylé`);
 
   // État initial : ajusté à la largeur, réduction impossible.
   assert.equal(lbl.textContent, '100 %', `[${label}] libellé initial`);
@@ -168,6 +176,20 @@ function testPages() {
       assert.match(html, /id="zoomFit"/, `[${p.label}] bouton d'ajustement présent`);
       assert.match(html, /id="screenBox"/, `[${p.label}] cadre de défilement présent`);
       assert.match(html, /id="liveBannerText"/, `[${p.label}] bannière d'état pilotable`);
+      assert.match(html, /id="badgeHttps"/, `[${p.label}] bandeau HTTPS présent`);
+      assert.match(html, /id="badgeE2ee"/, `[${p.label}] bandeau de chiffrement présent`);
+      assert.match(html, /id="badgeConn"/, `[${p.label}] bandeau de connexion présent`);
+      assert.match(html, /id="sysInfo"/, `[${p.label}] panneau infos système présent`);
+      assert.match(html, /id="diagOs"/, `[${p.label}] ligne système du panneau présente`);
+    }
+    // La page d'accueil est désormais un portail professionnel : les sections
+    // « À propos » et les garanties sont là pour une catégorisation honnête.
+    if (p.wrench) {
+      assert.match(html, /À propos/, `[${p.label}] section À propos présente`);
+      assert.match(html, /Chiffrement de bout en bout|chiffrée de bout en bout/, `[${p.label}] garantie de chiffrement affichée`);
+      if (p.label.startsWith('PHP')) {
+        assert.doesNotMatch(html, /noindex/, `[${p.label}] page d'accueil indexable (catégorisation)`);
+      }
     }
     console.log(`  OK  ${p.label} : crédit discret, icône GitHub${p.wrench ? ' et lien clé à molette' : ' et boutons de zoom'}`);
   }

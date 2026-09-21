@@ -1,0 +1,4 @@
+# Racine spinecho.fr : la page index.html prend le pas sur la page parking,
+# sans toucher aux sous-dossiers (la règle ne vaut que pour l'URL racine).
+RewriteEngine On
+RewriteRule ^$ index.html [L]

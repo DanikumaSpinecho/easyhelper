@@ -60,7 +60,7 @@ async function main() {
   r = await fetch(`${API}?action=create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userPub }),
+    body: JSON.stringify({ userPub, diag: { os: 'TestOS', mem: 8, https: true } }),
   });
   assert.equal(r.status, 200, 'create');
   const sess = await r.json();
@@ -99,6 +99,7 @@ async function main() {
   const joined = await r.json();
   assert.equal(joined.userPub, userPub, 'clé publique utilisateur restituée');
   assert.equal(joined.salt, sess.salt, 'sel restitué');
+  assert.equal(joined.diag && joined.diag.os, 'TestOS', 'diagnostics du poste restitués au technicien');
 
   r = await fetch(`${API}?action=join`, {
     method: 'POST',

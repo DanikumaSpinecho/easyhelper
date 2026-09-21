@@ -28,6 +28,25 @@
   const zoomLabel = $('zoomLabel');
   const liveBanner = $('liveBanner');
   const liveBannerText = $('liveBannerText');
+  const badgeHttps = $('badgeHttps');
+  const badgeE2ee = $('badgeE2ee');
+  const badgeConn = $('badgeConn');
+  const sysInfo = $('sysInfo');
+
+  // Bandeau d'état : transport (HTTPS), chiffrement de bout en bout des images
+  // et état de la connexion — la vérité de ce qui se passe, affichée.
+  function setBadge(el, cls, text) {
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'badge ' + cls;
+  }
+
+  function initBadges() {
+    setBadge(badgeHttps, location.protocol === 'https:' ? 'ok' : 'warn',
+      location.protocol === 'https:' ? '🔒 HTTPS' : '⚠ HTTP (non chiffré)');
+    setBadge(badgeE2ee, 'off', 'Chiffrement…');
+    setBadge(badgeConn, 'off', 'Hors session');
+  }
   const viewerStatus = $('viewerStatus');
   const closeBtn = $('closeBtn');
   const logoutBtn = $('logoutBtn');
@@ -56,6 +75,44 @@
     }
   }
 
+  // Décodage minimal de l'agent utilisateur : système et navigateur — affichés
+  // au technicien uniquement, rien n'est envoyé ailleurs.
+  function parseUA(ua) {
+    let os = 'Inconnu';
+    let browser = 'Inconnu';
+    if (/Windows NT 10\.0/.test(ua)) os = 'Windows 10/11';
+    else if (/Windows NT [\d.]+/.test(ua)) os = 'Windows';
+    else if (/Mac OS X/.test(ua)) os = 'macOS';
+    else if (/Android/.test(ua)) os = 'Android';
+    else if (/iPhone|iPad|iPod/.test(ua)) os = 'iOS';
+    else if (/CrOS/.test(ua)) os = 'ChromeOS';
+    else if (/Linux/.test(ua)) os = 'Linux';
+    if (ua.indexOf('Edg/') >= 0) browser = 'Edge ' + ((ua.match(/Edg\/(\d+)/) || [])[1] || '?');
+    else if (ua.indexOf('Chrome/') >= 0) browser = 'Chrome ' + ((ua.match(/Chrome\/(\d+)/) || [])[1] || '?');
+    else if (ua.indexOf('Firefox/') >= 0) browser = 'Firefox ' + ((ua.match(/Firefox\/(\d+)/) || [])[1] || '?');
+    else if (/Safari\//.test(ua)) browser = 'Safari';
+    return { os, browser };
+  }
+
+  // Infos du poste de la personne aidée, reçues à la connexion. Tout est
+  // affiché en textContent (aucune interprétation) : aucune injection possible.
+  function renderSysInfo(diag) {
+    if (!sysInfo || !diag) return;
+    const ua = parseUA(String(diag.ua || ''));
+    const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+    set('diagOs', ua.os);
+    set('diagBrowser', ua.browser);
+    set('diagRam', (typeof diag.mem === 'number' && diag.mem > 0) ? '≈ ' + diag.mem + ' Go' : '—');
+    set('diagCores', diag.cores ? String(diag.cores) : '—');
+    set('diagScreen', diag.screen ? diag.screen + (diag.dpr && diag.dpr !== 1 ? ' · DPR ' + diag.dpr : '') : '—');
+    set('diagLang', [diag.lang, diag.tz].filter(Boolean).join(' · ') || '—');
+    set('diagNet', diag.net && diag.net.type
+      ? [diag.net.type, typeof diag.net.downlink === 'number' ? diag.net.downlink + ' Mb/s' : '', typeof diag.net.rtt === 'number' ? diag.net.rtt + ' ms' : ''].filter(Boolean).join(' · ')
+      : '—');
+    set('diagSecure', diag.https === false ? 'HTTP (non sécurisé)' : 'HTTPS sécurisé');
+    sysInfo.classList.remove('hidden');
+  }
+
   async function refreshAuth() {
     let authed = false;
     try {
@@ -70,6 +127,7 @@
     if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
     endMsg = null;
     setZoom(ZOOM_FIT);
+    initBadges();
     hide(viewer);
     if (backToCode) show(codeCard);
   }
@@ -126,6 +184,9 @@
       // La personne aidée était déjà connectée : on dérive la clé sans attendre.
       await cryptoApi.derive(info.userPub, salt);
     }
+    if (info && info.diag) renderSysInfo(info.diag);
+    setBadge(badgeE2ee, (cryptoApi.available && cryptoApi.hasKey && cryptoApi.hasKey()) ? 'ok' : 'warn',
+      (cryptoApi.available && cryptoApi.hasKey && cryptoApi.hasKey()) ? '🔒 Chiffré de bout en bout' : '⚠ Relais direct (non chiffré)');
     openViewer(code);
   });
 
@@ -138,6 +199,7 @@
       hide(codeCard);
       show(viewer);
       setStatus(viewerStatus, 'Connecté — écran en direct.');
+      setBadge(badgeConn, 'ok', '● En direct');
     };
     ws.onmessage = async (ev) => {
       if (typeof ev.data === 'string') {
@@ -157,6 +219,7 @@
             : 'Session terminée (' + msg.reason + ').';
           setStatus(viewerStatus, endMsg);
           setLiveBanner('Partage terminé', true);
+          setBadge(badgeConn, 'off', 'Terminé');
         }
         return;
       }
@@ -176,10 +239,14 @@
         }
         setStatus(viewerStatus, 'Connecté — écran en direct (chiffré de bout en bout).');
         setLiveBanner('Écran en direct', false);
+        setBadge(badgeE2ee, 'ok', '🔒 Chiffré de bout en bout');
+        setBadge(badgeConn, 'ok', '● En direct');
         renderFrame(plain);
       } else {
         setStatus(viewerStatus, 'Connecté — écran en direct.');
         setLiveBanner('Écran en direct', false);
+        setBadge(badgeE2ee, 'warn', '⚠ Relais direct (non chiffré)');
+        setBadge(badgeConn, 'ok', '● En direct');
         renderFrame(payload);
       }
     };
@@ -246,6 +313,7 @@
   const m = location.hash.match(/code=(\d{6})/);
   if (m) codeInput.value = m[1];
 
+  initBadges();
   applyZoom();
   refreshAuth();
 })();

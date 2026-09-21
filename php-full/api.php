@@ -91,6 +91,13 @@ switch ($action) {
         } while (is_file(meta_path($code)));
         $body = read_json_body();
         $userPub = is_array($body) ? valid_pubkey((string) ($body['userPub'] ?? '')) : '';
+        // Diagnostics du poste de la personne aidée (exposés par le navigateur) :
+        // stockés tels quels, bornés en taille, restitués au seul technicien.
+        $diag = null;
+        if (is_array($body) && isset($body['diag']) && is_array($body['diag'])) {
+            $encoded = json_encode($body['diag']);
+            if (is_string($encoded) && strlen($encoded) <= 2000) $diag = $body['diag'];
+        }
         $salt = bin2hex(random_bytes(16));
         $token = bin2hex(random_bytes(32));
         $meta = [
@@ -106,6 +113,7 @@ switch ($action) {
             'userPub' => $userPub,
             'techPub' => '',
             'salt' => $salt,
+            'diag' => $diag,
         ];
         save_meta($code, $meta);
         json_out(200, [
@@ -259,6 +267,7 @@ switch ($action) {
             'salt' => (string) ($meta['salt'] ?? ''),
             'crypto' => ($meta['userPub'] ?? '') !== '' ? 'ecdh-p256-aesgcm' : 'none',
             'techCrypto' => $meta['techCrypto'],
+            'diag' => $meta['diag'] ?? null,
         ]);
         break;
 

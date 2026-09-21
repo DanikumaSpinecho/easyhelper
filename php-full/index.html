@@ -3,23 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="EasyHelper : assistance à distance par partage d'écran en lecture seule, chiffrée de bout en bout. Aucune installation, aucun enregistrement, arrêt à tout moment.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'">
-  <title>Aide à distance</title>
-  <link rel="stylesheet" href="style.css?v=3">
+  <title>EasyHelper — Assistance à distance sécurisée</title>
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <main class="wrap">
-  <header>
-    <h1>Aide à distance</h1>
-    <p>Partage d'écran ponctuel et sécurisé, pour la famille et les proches.</p>
+  <header class="siteHead">
+    <span class="brand"><span class="mark">E</span> EasyHelper <span class="tag">Assistance à distance sécurisée</span></span>
   </header>
 
-  <section id="intro" class="card">
-    <p>En cliquant sur <strong>Partager mon écran</strong>, votre écran est montré <strong>en direct</strong> à votre proche. Il ne peut ni contrôler votre souris ni votre clavier.</p>
-    <p>Vous gardez le contrôle complet et pouvez arrêter le partage à tout moment. <strong>Rien n'est enregistré.</strong></p>
+  <section id="intro" class="card hero">
+    <h1>De l'aide, sans se déplacer.</h1>
+    <p>EasyHelper permet à une personne de confiance de <strong>voir votre écran</strong> pour vous guider pas à pas — retrouver un dossier, ouvrir une application, connecter une imprimante. Sans rien installer, sans prise de contrôle, sans enregistrement.</p>
     <button id="startBtn" class="primary big" type="button">🖥️&nbsp; Partager mon écran</button>
-    <p class="hint">Aucun logiciel à installer. Un simple navigateur suffit.</p>
+    <p class="hint">Un clic, puis validez le partage dans la fenêtre du navigateur. Vous pouvez l'arrêter à tout moment.</p>
   </section>
 
   <section id="sharing" class="card hidden">
@@ -38,6 +37,26 @@
 
   <section id="status" class="card status hidden" role="status"></section>
 
+  <section class="trustRow">
+    <div class="miniCard"><strong>🔒 Chiffré de bout en bout</strong>Les images sont chiffrées dans votre navigateur et ne peuvent être lues que par la personne qui vous aide. Le serveur n'y a jamais accès en clair.</div>
+    <div class="miniCard"><strong>👁 Lecture seule</strong>Aucune prise de contrôle : personne ne peut cliquer ni taper à votre place. Votre écran est simplement montré, le temps que vous le décidez.</div>
+    <div class="miniCard"><strong>🚫 Aucun enregistrement</strong>Rien n'est stocké. Les images ne circulent que pendant le partage et sont supprimées dès l'arrêt.</div>
+    <div class="miniCard"><strong>🌐 HTTPS standard</strong>Aucun logiciel, aucun port spécial, aucune modification de configuration : un navigateur et une connexion web classique suffisent.</div>
+  </section>
+
+  <section class="card how">
+    <h2>Comment ça marche</h2>
+    <div class="step">Cliquez sur <strong>Partager mon écran</strong> et validez la demande du navigateur.</div>
+    <div class="step">Un code à 6 chiffres s'affiche : communiquez-le à votre interlocuteur (par téléphone, par exemple).</div>
+    <div class="step">Votre écran lui apparaît en direct. Vous arrêtez le partage quand vous voulez — tout s'efface.</div>
+  </section>
+
+  <section class="card about">
+    <h2>À propos</h2>
+    <p>EasyHelper est un logiciel libre (GNU GPL v3) d'assistance à distance conçu pour les situations où une personne peu à l'aise avec l'outil informatique a besoin d'être guidée rapidement : proches, ou équipes soignantes devant un logiciel métier, un dossier patient ou un périphérique. Le partage est volontaire, limité à la durée de la session, et repose sur un chiffrement de bout en bout (ECDH P-256 + AES-256-GCM) — le relais ne peut jamais lire ce qu'il transporte.</p>
+    <p>Code source : <a href="https://github.com/DanikumaSpinecho/easyhelper" rel="noopener noreferrer" target="_blank">github.com/DanikumaSpinecho/easyhelper</a></p>
+  </section>
+
   <footer>
     <p class="legal">Rien n'est enregistré. Les images ne circulent que pendant le partage, puis sont immédiatement supprimées.</p>
     <p class="credit">
@@ -48,6 +67,6 @@
 </main>
 <noscript><p class="noscript">Cette page nécessite JavaScript.</p></noscript>
 <script src="crypto.js?v=3"></script>
-<script src="user.js?v=4"></script>
+<script src="user.js?v=5"></script>
 </body>
 </html>

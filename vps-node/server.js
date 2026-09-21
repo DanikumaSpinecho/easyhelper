@@ -322,6 +322,15 @@ async function handleApi(req, res, url) {
     if (activeForIp >= config.maxSessionsPerIp) return sendJson(res, 429, { error: 'too-many-sessions' });
     if (sessions.size >= config.maxSessions) return sendJson(res, 429, { error: 'busy' });
     const session = createSession(ip);
+    // Diagnostics du poste de la personne aidée (exposés par le navigateur) :
+    // stockés en mémoire, bornés en taille, restitués au seul technicien.
+    const body = await readJson(req);
+    if (body && body.diag && typeof body.diag === 'object' && !Array.isArray(body.diag)) {
+      try {
+        const enc = JSON.stringify(body.diag);
+        if (enc.length <= 2000) session.diag = body.diag;
+      } catch { /* ignore */ }
+    }
     return sendJson(res, 200, {
       code: session.code,
       token: session.userToken,
@@ -360,6 +369,7 @@ async function handleApi(req, res, url) {
       salt: session.salt,
       crypto: session.userPub ? 'ecdh-p256-aesgcm' : 'none',
       techCrypto: techPub !== '',
+      diag: session.diag || null,
     });
   }
 

@@ -103,7 +103,11 @@ async function main() {
 
   // 1. Création de session
   step(1, 'création de session');
-  const sres = await fetch(`${BASE}/api/session`, { method: 'POST' });
+  const sres = await fetch(`${BASE}/api/session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ diag: { os: 'TestOS', mem: 8, https: true } }),
+  });
   assert.equal(sres.status, 200, 'POST /api/session');
   const sess = await sres.json();  assert.match(sess.code, /^\d{6}$/, 'code à 6 chiffres');
   assert.ok(/^[0-9a-f]{64}$/.test(sess.token), 'jeton utilisateur 256 bits');
@@ -140,6 +144,7 @@ async function main() {
   assert.equal(jres.status, 200, 'POST /api/join');
   const joinedInfo = await jres.json();
   assert.equal(joinedInfo.salt, sess.salt, 'sel restitué au technicien');
+  assert.equal(joinedInfo.diag && joinedInfo.diag.os, 'TestOS', 'diagnostics du poste restitués au technicien');
 
   const jbad = await fetch(`${BASE}/api/join`, {
     method: 'POST',

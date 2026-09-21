@@ -264,6 +264,31 @@ async function main() {
               return t.indexOf('écran en direct') >= 0 ? t : ''; })()`,
     'première image affichée',
   );
+
+  // Bandeaux d'état : transport, chiffrement de bout en bout, connexion —
+  // et panneau des infos du poste de la personne aidée.
+  const badges = await tech.eval(`(() => ({
+    https: document.getElementById('badgeHttps').textContent,
+    e2ee: document.getElementById('badgeE2ee').textContent,
+    conn: document.getElementById('badgeConn').textContent,
+    sys: !document.getElementById('sysInfo').classList.contains('hidden'),
+    os: document.getElementById('diagOs').textContent,
+    browser: document.getElementById('diagBrowser').textContent,
+  }))()`);
+  // Le bandeau de transport reflète la réalité : HTTPS en production,
+  // avertissement HTTP quand le test tourne contre le serveur local.
+  if (REMOTE) {
+    assert.match(badges.https, /HTTPS/, 'bandeau HTTPS affiché');
+  } else {
+    assert.match(badges.https, /HTTP/, 'bandeau HTTP (test local) affiché');
+  }
+  assert.match(badges.e2ee, /hiffr/, 'bandeau « chiffré de bout en bout » affiché');
+  assert.match(badges.conn, /direct/, 'bandeau « en direct » affiché');
+  assert.equal(badges.sys, true, 'infos système visibles');
+  assert.notEqual(badges.os, '—', 'système d\'exploitation renseigné');
+  assert.notEqual(badges.browser, '—', 'navigateur renseigné');
+  console.log(`   bandeaux : « ${badges.https} » · « ${badges.e2ee} » · « ${badges.conn} »`);
+  console.log(`   poste aidé : ${badges.os} / ${badges.browser}`);
   const infos = await tech.eval(`(() => {
     const img = document.getElementById('screen');
     return {
@@ -313,6 +338,9 @@ async function main() {
     'notification de fin côté technicien',
   );
   console.log(`   technicien informé : « ${fin} »`);
+  const connFin = await tech.eval(`document.getElementById('badgeConn').textContent`);
+  assert.match(connFin, /ermin/, 'bandeau de connexion passé à « Terminé »');
+  console.log(`   bandeau de connexion : « ${connFin} »`);
 
   // La bannière doit refléter l'arrêt : elle annonçait « Écran en direct »
   // indéfiniment, ce qui laissait croire que le partage continuait.

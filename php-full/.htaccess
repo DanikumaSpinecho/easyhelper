@@ -1,7 +1,19 @@
 # easyhelper — hébergement mutualisé (LiteSpeed/Apache)
 
-# Pas de cache sur les pages et l'API : le relais doit rester temps réel
+# HTTPS forcé (ceinture-bretelles : l'hébergeur le fait déjà)
+RewriteEngine On
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
 <IfModule mod_headers.c>
+  # Sécurité du transport et du contenu
+  Header set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set Content-Security-Policy "default-src 'self'; connect-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+
+  # Pas de cache sur les pages et l'API : le relais doit rester temps réel
   <FilesMatch "\.(html|php)$">
     Header set Cache-Control "no-store"
   </FilesMatch>

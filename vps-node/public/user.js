@@ -122,7 +122,11 @@
     // 2. Création de la session relais.
     let res;
     try {
-      res = await fetch('/api/session', { method: 'POST' });
+      res = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ diag: collectDiag() }),
+      });
     } catch {
       resetUi();
       setStatus('Impossible de contacter le serveur.');
@@ -265,6 +269,31 @@
     stopping = true;
     resetUi();
     setStatus(msg);
+  }
+
+  // Diagnostics du poste, exposés par le navigateur uniquement (rien
+  // d'invasif) : envoyés UNE seule fois à la création, visibles seulement du
+  // technicien, dans le canal déjà sécurisé. Rien n'est sondé en continu.
+  function collectDiag() {
+    const c = navigator.connection || {};
+    let tz = '';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { /* ignore */ }
+    return {
+      ua: navigator.userAgent || '',
+      platform: navigator.platform || '',
+      cores: navigator.hardwareConcurrency || 0,
+      mem: typeof navigator.deviceMemory === 'number' ? navigator.deviceMemory : null,
+      screen: (typeof screen !== 'undefined' && screen.width) ? screen.width + 'x' + screen.height : '',
+      dpr: window.devicePixelRatio || 1,
+      lang: navigator.language || '',
+      tz,
+      net: (c.effectiveType || c.type) ? {
+        type: c.effectiveType || c.type || '',
+        downlink: typeof c.downlink === 'number' ? c.downlink : null,
+        rtt: typeof c.rtt === 'number' ? c.rtt : null,
+      } : null,
+      https: location.protocol === 'https:',
+    };
   }
 
   function stopSharing() {

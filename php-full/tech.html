@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'">
   <title>Espace technicien</title>
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <main class="wrap">
@@ -43,6 +43,24 @@
       <button id="zoomIn" class="ghost zoomBtn" type="button" title="Agrandir" aria-label="Agrandir le zoom">+</button>
       <button id="zoomFit" class="ghost zoomBtn" type="button" title="Revenir à la taille d'ajustement">Ajuster</button>
     </div>
+    <div class="connStrip">
+      <span id="badgeHttps" class="badge off">…</span>
+      <span id="badgeE2ee" class="badge off">…</span>
+      <span id="badgeConn" class="badge off">…</span>
+    </div>
+    <div id="sysInfo" class="sysinfo hidden">
+      <h3>Poste de la personne aidée</h3>
+      <div class="sysgrid">
+        <span class="k">Système</span><span id="diagOs" class="v">—</span>
+        <span class="k">Navigateur</span><span id="diagBrowser" class="v">—</span>
+        <span class="k">RAM (approx.)</span><span id="diagRam" class="v">—</span>
+        <span class="k">Cœurs CPU</span><span id="diagCores" class="v">—</span>
+        <span class="k">Écran</span><span id="diagScreen" class="v">—</span>
+        <span class="k">Langue / fuseau</span><span id="diagLang" class="v">—</span>
+        <span class="k">Réseau</span><span id="diagNet" class="v">—</span>
+        <span class="k">Connexion</span><span id="diagSecure" class="v">—</span>
+      </div>
+    </div>
     <p id="viewerStatus" class="muted"></p>
     <button id="closeBtn" class="ghost big" type="button">Fermer la vue</button>
   </section>
@@ -55,6 +73,6 @@
   </footer>
 </main>
 <script src="crypto.js?v=3"></script>
-<script src="tech.js?v=3"></script>
+<script src="tech.js?v=5"></script>
 </body>
 </html>
