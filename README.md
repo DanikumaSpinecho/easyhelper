@@ -4,11 +4,9 @@ EasyHelper permet à un technicien de **voir l'écran** d'une personne qu'il
 aide pendant quelques minutes, afin de la guider oralement. Rien à installer,
 aucune prise de contrôle, aucun enregistrement.
 
-Le cas d'usage visé : apporter rapidement une **assistance de confiance** à une
-personne peu à l'aise avec l'informatique — par exemple un soignant en milieu
-hospitalier qui doit retrouver un dossier, ouvrir une application métier ou
-connecter une imprimante, sans attendre qu'un service informatique puisse se
-déplacer.
+Le cas d'usage visé : apporter rapidement une **assistance de confiance** à
+distance — ouvrir une application, retrouver un fichier ou connecter une
+imprimante — sans attendre qu'un service informatique puisse se déplacer.
 
 - **La personne aidée** ouvre une page web, clique sur **Partager mon écran**,
   autorise le partage (fenêtre, onglet ou écran entier) et lit un code à voix
@@ -238,7 +236,8 @@ qui n'a jamais quitté son navigateur.
   contre un serveur **honnête mais curieux**, contre un accès à son stockage
   ou à son disque, et contre un tiers sur le réseau — pas contre l'opérateur du
   relais qui attaquerait activement. C'est un choix assumé : il n'y a rien à
-  installer, ce qui est la condition pour aider une personne en difficulté.
+  installer, et la personne aidée n'a rien d'autre à faire qu'accepter le
+  partage.
 - **Le mot de passe protège l'accès, pas la cryptographie.** Un technicien
   authentifié voit ce que la personne aidée a accepté de montrer — d'où
   l'importance du consentement explicite et de l'arrêt à tout moment.
