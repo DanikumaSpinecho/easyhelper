@@ -49,6 +49,17 @@ getDisplayMedia + canvas JPEG ──► POST api.php?action=upload ──► fic
   renvoie immédiatement l'image suivante. Latence typique < 500 ms.
 - La présence du technicien est détectée côté serveur : la page de la
   personne aidée affiche « ✅ Votre proche est connecté ».
+- La capture se fait à la **résolution native de l'écran** (plafonnée à
+  1920 px). Le technicien dispose d'un zoom « **1:1** » : chaque pixel envoyé
+  occupe un pixel de son écran, seul réglage qui rend un texte fin lisible.
+- **Fin de session propre, des deux côtés.** Un arrêt efface immédiatement
+  l'image stockée. Si la personne aidée ferme sa fenêtre sans arrêter (ou que
+  son navigateur tombe), le relais s'en aperçoit : la personne aidée appelle
+  le serveur en continu pendant un partage, et 120 s sans aucun appel
+  (`client_gone_ms`) terminent la session. Le technicien peut aussi mettre fin
+  à la session de son côté (`action=end`) : plus aucune image n'est alors
+  acceptée, l'image est effacée et la personne aidée en est informée — on
+  passe à la personne suivante sans laisser d'écran en ligne.
 
 ## Sécurité (identique à la variante Node.js)
 

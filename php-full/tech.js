@@ -26,6 +26,7 @@
   const zoomInBtn = $('zoomIn');
   const zoomOutBtn = $('zoomOut');
   const zoomFitBtn = $('zoomFit');
+  const zoomRealBtn = $('zoomReal');
   const zoomLabel = $('zoomLabel');
   const liveBanner = $('liveBanner');
   const liveBannerText = $('liveBannerText');
@@ -50,12 +51,15 @@
   }
   const viewerStatus = $('viewerStatus');
   const closeBtn = $('closeBtn');
+  const terminateBtn = $('terminateBtn');
   const logoutBtn = $('logoutBtn');
 
   let controller = null;
   let objectUrl = null;
   let endMsg = null;
   let encryptedSession = false;
+  let currentCode = '';
+  let terminating = false;
 
   // Zoom de la vue (100 % = ajusté à la largeur). L'image zoomée défile dans
   // le cadre : la page n'est jamais étirée.
@@ -128,8 +132,11 @@
   function closeViewer(backToCode = true) {
     if (controller) { controller.abort(); controller = null; }
     if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
+    // Rien ne doit rester affiché après la fermeture de la vue.
+    if (screenImg && screenImg.removeAttribute) screenImg.removeAttribute('src');
     endMsg = null;
     encryptedSession = false;
+    currentCode = '';
     setZoom(ZOOM_FIT);
     initBadges();
     hide(viewer);
@@ -194,6 +201,8 @@
   });
 
   function openViewer(code) {
+    currentCode = code;
+    if (terminateBtn) terminateBtn.disabled = false;
     controller = new AbortController();
     endMsg = null;
     setLiveBanner('Connexion…', false);
@@ -273,10 +282,19 @@
   function endedMsg(reason) {
     endMsg = reason === 'user-stopped'
       ? 'La personne aidée a arrêté le partage.'
-      : 'Session terminée (' + reason + ').';
+      : reason === 'tech-stopped'
+        ? 'Vous avez mis fin à la session. Plus aucune image n\u2019est acceptée.'
+        : reason === 'client-gone'
+          ? 'La fenêtre de partage a été fermée : session terminée.'
+          : 'Session terminée (' + reason + ').';
     setStatus(viewerStatus, endMsg);
     setLiveBanner('Partage terminé', true);
     setBadge(badgeConn, 'off', 'Terminé');
+    // L'image est effacée : après la fin du partage, il ne doit rien rester à
+    // l'écran — ni sur le serveur (purgé), ni dans le navigateur du technicien.
+    if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
+    if (screenImg && screenImg.removeAttribute) screenImg.removeAttribute('src');
+    if (terminateBtn) terminateBtn.disabled = true;
   }
 
   function renderFrame(bytes) {
@@ -321,6 +339,38 @@
   onZoomButton(zoomInBtn, () => setZoom(zoom + ZOOM_STEP));
   onZoomButton(zoomOutBtn, () => setZoom(zoom - ZOOM_STEP));
   zoomFitBtn.addEventListener('click', () => { setZoom(ZOOM_FIT); screenBox.scrollTo(0, 0); });
+  // « 1:1 » : chaque pixel de l'écran aidé sur un pixel de l'écran du
+  // technicien — c'est la seule façon de lire un texte fin sans l'agrandir
+  // puis le deviner. Le pourcentage reste exprimé par rapport à la largeur du
+  // cadre, comme le zoom manuel.
+  if (zoomRealBtn) zoomRealBtn.addEventListener('click', () => {
+    const nat = screenImg.naturalWidth || 0;
+    const cw = screenBox.clientWidth || 0;
+    if (!nat || !cw) return;
+    setZoom(Math.round(nat / cw * 100));
+    screenBox.scrollTo(0, 0);
+  });
+
+  // Arrêt net décidé par le technicien : la personne aidée peut avoir laissé
+  // son partage tourner (fenêtre oubliée). Le serveur refuse alors toute image
+  // et efface celle qu'il détenait — on passe à la personne suivante le
+  // esprit tranquille.
+  async function terminateSession() {
+    if (!currentCode || terminating) return;
+    terminating = true;
+    if (terminateBtn) terminateBtn.disabled = true;
+    try {
+      await fetch(API + '?action=end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: currentCode }),
+      });
+    } catch { /* l'état local est mis à jour même si le serveur n'a pas répondu */ }
+    terminating = false;
+    endedMsg('tech-stopped');
+  }
+
+  if (terminateBtn) terminateBtn.addEventListener('click', terminateSession);
 
   closeBtn.addEventListener('click', () => closeViewer());
   logoutBtn.addEventListener('click', async () => {

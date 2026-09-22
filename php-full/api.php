@@ -8,6 +8,7 @@
  *   upload   POST   envoie une image chiffrée (en-têtes X-Code/X-Token)
  *   status   GET    état de la session (personne aidée) : technicien connecté ?
  *   stop     POST   termine la session (en-têtes X-Code/X-Token)
+ *   end      POST   termine la session (technicien authentifié) — arrêt net
  *   login    POST   connexion technicien (JSON {password})
  *   logout   POST   déconnexion technicien
  *   me       GET    état d'authentification du technicien       → {ok}
@@ -54,6 +55,19 @@ function session_from_headers(): ?array
 {
     $code = valid_code((string) ($_SERVER['HTTP_X_CODE'] ?? ''));
     $token = (string) ($_SERVER['HTTP_X_TOKEN'] ?? '');
+    // Repli par le corps JSON : certains envois ne permettent pas d'en-têtes
+    // personnalisés (navigator.sendBeacon, émis à la fermeture de la fenêtre).
+    // Le jeton reste le secret : sur HTTPS, le corps vaut les en-têtes.
+    // Réservé au JSON : lire un corps binaire ici ferait lire deux fois les
+    // octets de l'image, pour rien.
+    if (($code === '' || $token === '')
+        && stripos((string) ($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== false) {
+        $body = read_json_body();
+        if (is_array($body)) {
+            if ($code === '') $code = valid_code((string) ($body['code'] ?? ''));
+            if ($token === '') $token = (string) ($body['token'] ?? '');
+        }
+    }
     if ($code === '') return null;
     $meta = load_meta($code);
     if ($meta === null) return null;
@@ -107,6 +121,9 @@ switch ($action) {
             'created' => now_ms(),
             // La limite de cadence s'applique entre deux images : la première est toujours acceptée.
             'lastFrameAt' => now_ms() - $CONFIG['frame_min_interval_ms'],
+            // Dernier signe de vie de la personne aidée : c'est ce repère qui
+            // permet de détecter une fenêtre fermée sans arrêt explicite.
+            'clientSeen' => now_ms(),
             'frameId' => 0,
             // Chiffrement de bout en bout : le serveur ne stocke que des clés
             // publiques et un sel ; la clé de chiffrement reste dans les navigateurs.
@@ -135,6 +152,11 @@ switch ($action) {
         if (!empty($meta['ended'])) {
             json_out(200, ['state' => 'ended', 'reason' => $meta['ended']]);
         }
+        // Fenêtre fermée sans arrêt explicite : on refuse la trame et on purge.
+        if (client_gone($meta)) {
+            end_session($code, 'client-gone', $meta);
+            json_out(200, ['state' => 'ended', 'reason' => 'client-gone']);
+        }
         $now = now_ms();
         if ($now - (int) $meta['lastFrameAt'] < $CONFIG['frame_min_interval_ms']) {
             json_out(429, ['error' => 'rate-limited']);
@@ -152,6 +174,7 @@ switch ($action) {
         @rename($tmp, frame_path($code)); // écriture atomique : le lecteur ne voit jamais d'image tronquée
         $meta['frameId'] = (int) $meta['frameId'] + 1;
         $meta['lastFrameAt'] = $now;
+        $meta['clientSeen'] = $now;
         // On mémorise ce qui a réellement été envoyé : le technicien saura ainsi
         // s'il doit déchiffrer ou afficher directement (repli automatique).
         $meta['frameEnc'] = (stripos((string) ($_SERVER['CONTENT_TYPE'] ?? ''), 'octet-stream') !== false);
@@ -170,6 +193,12 @@ switch ($action) {
         $meta = session_from_headers();
         if ($meta === null) json_out(401, ['error' => 'unauthorized']);
         $code = $meta['code'];
+        if (client_gone($meta)) {
+            end_session($code, 'client-gone', $meta);
+            json_out(200, ['state' => 'ended', 'reason' => 'client-gone']);
+        }
+        $meta['clientSeen'] = now_ms();
+        save_meta($code, $meta);
         json_out(200, [
             'state' => !empty($meta['ended']) ? 'ended' : 'live',
             'reason' => (string) ($meta['ended'] ?? ''),
@@ -186,10 +215,24 @@ switch ($action) {
         $meta = session_from_headers();
         if ($meta === null) json_out(401, ['error' => 'unauthorized']);
         $code = $meta['code'];
-        if (empty($meta['ended'])) {
-            $meta['ended'] = 'user-stopped';
-            save_meta($code, $meta);
-        }
+        // Un arrêt est définitif : l'image part tout de suite, pas dans 10 min.
+        end_session($code, 'user-stopped', $meta);
+        json_out(200, ['ok' => true]);
+        break;
+
+    // Le technicien met fin à la session de son côté : la personne aidée peut
+    // avoir laissé son partage tourner (fenêtre oubliée, navigateur bloqué).
+    // Rien n'est plus accepté ensuite et l'image stockée est effacée.
+    case 'end':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_out(405, ['error' => 'method-not-allowed']);
+        auth_start();
+        if (!is_authed()) json_out(401, ['error' => 'auth-required']);
+        $body = read_json_body();
+        $code = valid_code((string) (is_array($body) ? ($body['code'] ?? '') : ''));
+        if ($code === '') json_out(400, ['error' => 'bad-code']);
+        $meta = load_meta($code);
+        if ($meta === null) json_out(404, ['error' => 'unknown-code']);
+        end_session($code, 'tech-stopped', $meta);
         json_out(200, ['ok' => true]);
         break;
 
@@ -281,6 +324,10 @@ switch ($action) {
         $meta = load_meta($code);
         if ($meta === null) json_out(404, ['error' => 'unknown-code']);
         if (!empty($meta['ended'])) json_out(200, ['state' => 'ended', 'reason' => $meta['ended']]);
+        if (client_gone($meta)) {
+            end_session($code, 'client-gone', $meta);
+            json_out(200, ['state' => 'ended', 'reason' => 'client-gone']);
+        }
         session_write_close(); // libère le verrou de session avant l'attente
 
         $waitMs = max(500, (int) $CONFIG['fetch_wait_ms']);
@@ -290,6 +337,10 @@ switch ($action) {
             $current = load_meta($code);
             if ($current === null) json_out(200, ['state' => 'ended', 'reason' => 'unknown']);
             if (!empty($current['ended'])) json_out(200, ['state' => 'ended', 'reason' => $current['ended']]);
+            if (client_gone($current)) {
+                end_session($code, 'client-gone', $current);
+                json_out(200, ['state' => 'ended', 'reason' => 'client-gone']);
+            }
             if ((int) $current['frameId'] > $after) break;
             usleep(200000);
         }

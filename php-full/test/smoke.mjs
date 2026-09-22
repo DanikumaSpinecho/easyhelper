@@ -9,9 +9,16 @@
 
 import assert from 'node:assert/strict';
 import { createECDH, createCipheriv, createDecipheriv, hkdfSync, randomBytes, createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const BASE = process.env.BASE || 'http://127.0.0.1:8080';
 const PASSWORD = process.env.TEST_PASSWORD || '';
+const IS_REMOTE = !!process.env.BASE;
+// Repertoire des sessions, pour les controles qui exigent d'inspecter ce que le
+// serveur a reellement efface (uniquement en local : rien a voir par HTTP).
+const SESSIONS_DIR = path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), 'data', 'sessions');
 if (!PASSWORD) {
   console.error('Définissez TEST_PASSWORD (mot de passe technicien configuré).');
   process.exitCode = 2;
@@ -198,6 +205,93 @@ async function main() {
     body: Buffer.alloc(300000, 1),
   });
   assert.equal(r.status, 413, 'image trop grande refusée');
+
+  // 10. Arrêt par corps JSON, sans en-têtes personnalisés : c'est exactement ce
+  // que le navigateur envoie à la fermeture de la fenêtre (sendBeacon).
+  const s3 = await (await fetch(`${API}?action=create`, { method: 'POST' })).json();
+  r = await fetch(`${API}?action=stop`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: s3.code, token: s3.token }),
+  });
+  assert.equal(r.status, 200, 'arrêt par corps JSON (fermeture de fenêtre)');
+  r = await fetch(`${API}?action=status`, { headers: { 'X-Code': s3.code, 'X-Token': s3.token } });
+  assert.equal((await r.json()).state, 'ended', 'session close après l\'arrêt par corps JSON');
+
+  // 11. Arrêt net décidé par le technicien : la personne aidée peut avoir
+  // laissé son partage tourner, le technicien doit pouvoir clore de son côté.
+  const s4 = await (await fetch(`${API}?action=create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userPub }),
+  })).json();
+  r = await fetch(`${API}?action=join`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie },
+    body: JSON.stringify({ code: s4.code }),
+  });
+  assert.equal(r.status, 200, 'join de la session à clore');
+  r = await fetch(`${API}?action=end`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: s4.code }),
+  });
+  assert.equal(r.status, 401, 'arrêt net refusé sans authentification technicien');
+  r = await fetch(`${API}?action=end`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie },
+    body: JSON.stringify({ code: s4.code }),
+  });
+  assert.equal(r.status, 200, 'arrêt net accepté pour le technicien authentifié');
+  // La personne aidée doit l'apprendre et ne plus pouvoir envoyer d'image.
+  r = await fetch(`${API}?action=status`, { headers: { 'X-Code': s4.code, 'X-Token': s4.token } });
+  const st4 = await r.json();
+  assert.equal(st4.state, 'ended', 'la personne aidée voit la session close');
+  assert.equal(st4.reason, 'tech-stopped', 'motif « arrêt par le technicien »');
+  r = await fetch(`${API}?action=upload`, {
+    method: 'POST',
+    headers: { 'X-Code': s4.code, 'X-Token': s4.token },
+    body: Buffer.alloc(64, 1),
+  });
+  assert.equal((await r.json()).state, 'ended', 'aucune image acceptée après l\'arrêt net');
+  r = await fetch(`${API}?action=join`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie },
+    body: JSON.stringify({ code: s4.code }),
+  });
+  assert.equal(r.status, 404, 'code refusé après l\'arrêt net : on peut passer à la suivante');
+
+  // 12. Disparition de la personne aidée : fenêtre fermée sans arrêt explicite.
+  //     L'image doit disparaître sans attendre les 10 min d'inactivité.
+  //     Ce contrôle exige d'antidater le repère de vie de la session : il ne
+  //     peut se faire qu'en local, en écrivant directement la métadonnée.
+  if (!IS_REMOTE) {
+    const s5 = await (await fetch(`${API}?action=create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userPub }),
+    })).json();
+    r = await fetch(`${API}?action=upload`, {
+      method: 'POST',
+      headers: { 'X-Code': s5.code, 'X-Token': s5.token, 'Content-Type': 'application/octet-stream' },
+      body: encryptFrame(deriveKey(tech.computeSecret(Buffer.from(userPub, 'base64')), s5.salt), Buffer.from('image-a-effacer')),
+    });
+    assert.equal(r.status, 200, 'image déposée avant la disparition');
+    const metaFile = path.join(SESSIONS_DIR, `meta_${s5.code}.json`);
+    const frameFile = path.join(SESSIONS_DIR, `frame_${s5.code}.bin`);
+    assert.equal(fs.existsSync(frameFile), true, 'image bien stockée avant le contrôle');
+    const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+    meta.clientSeen = Date.now() - 600000;   // fenêtre fermée il y a 10 min
+    meta.lastFrameAt = Date.now() - 600000;
+    fs.writeFileSync(metaFile, JSON.stringify(meta));
+    r = await fetch(`${API}?action=status`, { headers: { 'X-Code': s5.code, 'X-Token': s5.token } });
+    const st5 = await r.json();
+    assert.equal(st5.state, 'ended', 'session close : la personne aidée n\'est plus là');
+    assert.equal(st5.reason, 'client-gone', 'motif « client disparu »');
+    assert.equal(fs.existsSync(frameFile), false, 'image effacée immédiatement, sans attendre 10 min');
+  } else {
+    console.log('   (contrôle de disparition du client : local uniquement)');
+  }
 
   console.log('OK — relais PHP, authentification, limites, cycle de vie et chiffrement de bout en bout validés.');
 }

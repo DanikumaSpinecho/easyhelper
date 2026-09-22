@@ -373,6 +373,20 @@ async function handleApi(req, res, url) {
     });
   }
 
+  // POST /api/end — arrêt net décidé par le technicien. La personne aidée peut
+  // avoir laissé son partage tourner (fenêtre oubliée) : la session est close
+  // et la personne aidée prévenue par session-ended.
+  if (req.method === 'POST' && url.pathname === '/api/end') {
+    if (!isAuthed(req)) return sendJson(res, 401, { error: 'auth-required' });
+    const body = await readJson(req);
+    const code = body && typeof body.code === 'string' ? body.code.trim() : '';
+    if (!/^\d{6}$/.test(code)) return sendJson(res, 400, { error: 'bad-code' });
+    const session = sessions.get(code);
+    if (!session) return sendJson(res, 404, { error: 'unknown-code' });
+    endSession(session, 'tech-stopped');
+    return sendJson(res, 200, { ok: true });
+  }
+
   return sendJson(res, 404, { error: 'not-found' });
 }
 
@@ -486,7 +500,14 @@ function handleTechUpgrade(req, socket, head, url, st) {
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
     ws.on('error', () => { /* ignore */ });
-    ws.on('message', () => { /* le technicien est en réception seule : tout message est ignoré */ });
+    ws.on('message', (data) => {
+      // Le technicien est en réception seule pour les images. Seul message
+      // accepté : l'arrêt net de session, quand il veut passer à la suivante
+      // sans dépendre de la personne aidée.
+      let msg;
+      try { msg = JSON.parse(data.toString()); } catch { return; }
+      if (msg && msg.type === 'stop') endSession(session, 'tech-stopped');
+    });
     ws.on('close', () => {
       st.wsCount--;
       if (session.techWs === ws) {

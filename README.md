@@ -25,8 +25,11 @@ imprimante — sans attendre qu'un service informatique puisse se déplacer.
 - **Lecture seule** — aucun clic, aucune frappe, aucun contrôle à distance.
 - **Aucune installation** — un simple navigateur, côté personne aidée comme
   côté technicien ; rien à déployer sur les postes de travail.
-- **Aucune conservation** — les images ne sont pas enregistrées : supprimées à
-  la fin de la session (10 min sans activité, 1 h au maximum).
+- **Aucune conservation** — les images ne sont pas enregistrées. Un arrêt,
+  d'un côté comme de l'autre, efface **immédiatement** l'image stockée ; sinon
+  elle disparaît au plus tard après 10 min sans activité, et 1 h au maximum.
+  Fermer la fenêtre suffit : le relais détecte la disparition et clôt la
+  session au lieu de garder un écran en ligne.
 - **Transparence réseau** — le service n'utilise que du **HTTPS standard
   (port 443)**, exactement comme n'importe quel site web consulté depuis le
   poste. Aucun port exotique, aucun logiciel à installer côté poste, aucune
@@ -225,8 +228,11 @@ qui n'a jamais quitté son navigateur.
 - **Clés éphémères** — une paire neuve à chaque session : compromettre une
   session ne compromet aucune autre, ni les sessions passées.
 - **Aucune conservation** — les images ne sont jamais écrites durablement :
-  elles vivent en mémoire (Node) ou dans un fichier temporaire écrasé et
-  supprimé en fin de session (PHP), et restent illisibles pour le relais.
+  elles vivent en mémoire (Node) ou dans un fichier temporaire écrasé puis
+  supprimé (PHP), et restent illisibles pour le relais. La suppression est
+  **immédiate** à l'arrêt, quel qu'en soit l'auteur : bouton de la personne
+  aidée, bouton du technicien, fermeture de fenêtre détectée par le relais,
+  ou expiration (10 min sans activité, 1 h au maximum).
 
 ### Limites, énoncées honnêtement
 
@@ -301,10 +307,13 @@ qui n'a jamais quitté son navigateur.
 
 ## Bande passante
 
-≈ 2–3 Mbit/s en émission côté personne aidée (1280 px, ~3 images/s). En cas de
-connexion faible, la qualité JPEG baisse automatiquement. Côté serveur, seule
-la bande passante de relais est consommée : très léger pour un usage
-occasionnel.
+≈ 2–3 Mbit/s en émission côté personne aidée (résolution native de l'écran,
+plafonnée à 1920 px de large, ~3 images/s). La capture n'est plus réduite à
+1280 px : c'était la cause du texte illisible — zoomer n'agrandit que les
+pixels réellement transmis. En cas de connexion faible ou d'image trop
+lourde, la qualité JPEG baisse automatiquement (jamais la résolution). Côté
+serveur, seule la bande passante de relais est consommée : très léger pour un
+usage occasionnel.
 
 ## Limites connues
 
@@ -322,10 +331,16 @@ Les tests transverses se lancent depuis la racine (`npm install` une fois) :
 
 ```bash
 npm run test-crypto       # chiffrement des deux variantes + interopérabilité
-npm run test-ui           # interface : zoom, bannière d'état, crédit discret
+npm run test-ui           # interface : zoom (dont « 1:1 »), bannière, crédit, sources
 npm run test-zoom-frame   # cadre de zoom mesuré dans un vrai navigateur
 npm run test-browser      # parcours réel complet dans un vrai Chrome
 ```
+
+`test-ui` vérifie aussi trois propriétés de source faciles à casser sans que
+rien ne se voie : la capture à résolution native (et non plus 1280 px), l'arrêt
+signalé à la fermeture de la fenêtre, et l'effacement de l'image à la fin d'une
+session. `test-browser` couvre les deux arrêts : celui de la personne aidée et
+celui du technicien, avec refus du code ensuite.
 
 Chaque variante a en plus son test de bout en bout sans navigateur :
 

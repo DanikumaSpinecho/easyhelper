@@ -22,6 +22,12 @@ return [
     'session_idle_ms' => 600000,
     'session_max_ms' => 3600000,
 
+    // Fenêtre fermée sans arrêt explicite : la personne aidée interroge le
+    // serveur en continu (1 à 4 s) pendant un partage. Passé ce délai sans
+    // aucun appel, la session est terminée et l'image effacée, sans attendre
+    // les 10 min d'inactivité.
+    'client_gone_ms' => 120000,
+
     // Limites : 200 Ko/image, 2,5 images/s max par session,
     // 10 sessions simultanées (2 par IP).
     'max_frame_bytes' => 200000,

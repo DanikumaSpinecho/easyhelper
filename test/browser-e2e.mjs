@@ -300,7 +300,11 @@ async function main() {
   })()`);
   assert.equal(infos.src, 'blob:', 'image affichée depuis les octets reçus');
   assert.ok(infos.naturel !== '0x0', 'une vraie image a été décodée');
-  console.log(`   statut : « ${statut} » — image réelle ${infos.naturel}`);
+  // La capture ne doit plus être bridée à 1280 px : c'est la cause directe du
+  // texte illisible (zoomer n'agrandit que les pixels transmis).
+  const largeurSource = parseInt((infos.naturel.split('x')[0] || '0'), 10);
+  assert.ok(largeurSource >= 800, `image reçue à une largeur exploitable (${infos.naturel})`);
+  console.log(`   statut : « ${statut} » — image réelle ${infos.naturel} (largeur source ${largeurSource} px)`);
 
   console.log('5. zoom sur l\'image en direct');
   const avant = infos.largeur;
@@ -353,8 +357,54 @@ async function main() {
   assert.match(banniere, /termin/i, 'la bannière n\'annonce plus un direct');
   console.log(`   bannière mise à jour : « ${banniere} »`);
 
+  // 7. Arrêt net décidé par le TECHNICIEN : la personne aidée peut avoir laissé
+  // son partage tourner. Le serveur doit refuser toute image ensuite et la
+  // personne aidée doit l'apprendre — c'est ce qui permet de passer à la
+  // suivante sans laisser un écran en ligne.
+  console.log('7. arrêt net par le technicien (nouvelle session)');
+  await user.eval(`(() => { document.getElementById('intro').classList.remove('hidden');
+                            document.getElementById('startBtn').click(); })()`);
+  const code2 = await user.waitFor(
+    `(() => { const c = document.getElementById('code').textContent.trim();
+              return /^\\d{6}$/.test(c) && c !== ${JSON.stringify(code)} ? c : ''; })()`,
+    'nouvelle session ouverte',
+  );
+  await tech.eval(`(() => {
+    document.getElementById('code').value = ${JSON.stringify(code2)};
+    document.querySelector('#codeForm button[type=submit]').click();
+  })()`);
+  await tech.waitFor(`(() => { const t = document.getElementById('viewerStatus').textContent;
+                               return t.indexOf('écran en direct') >= 0 ? t : ''; })()`,
+    'seconde session en direct');
+  const boutonArret = await tech.eval(`(() => {
+    const b = document.getElementById('terminateBtn');
+    return { present: !!b, actif: b ? !b.disabled : false, libelle: b ? b.textContent.trim() : '' };
+  })()`);
+  assert.equal(boutonArret.present, true, 'bouton d\'arrêt net présent');
+  assert.equal(boutonArret.actif, true, 'bouton d\'arrêt net actif pendant la session');
+  console.log(`   bouton « ${boutonArret.libelle} » disponible`);
+  await tech.eval(`document.getElementById('terminateBtn').click()`);
+  const coteAidee = await user.waitFor(
+    `(() => { const t = document.getElementById('status').textContent;
+              return /technicien a mis fin/i.test(t) ? t : ''; })()`,
+    'la personne aidée apprend la fin décidée par le technicien',
+  );
+  console.log(`   personne aidée informée : « ${coteAidee} »`);
+  // La session close ne doit plus rien accepter : un nouvel essai de connexion
+  // au même code doit échouer côté technicien.
+  const apresArret = await tech.eval(`(async () => {
+    const r = await fetch('api.php?action=join', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: ${JSON.stringify(code2)} }) });
+    return r.status;
+  })()`);
+  assert.equal(apresArret, 404, 'session close : plus aucun accès au code');
+  const nettoye = await tech.eval(`document.getElementById('screen').getAttribute('src')`);
+  assert.ok(!nettoye, 'image effacée de la vue après la fin de session');
+  console.log('   session close : code refusé (404) et image effacée de la vue');
+
   console.log('\nOK — parcours réel complet validé dans un vrai navigateur :');
-  console.log('     partage d\'écran → chiffrement → déchiffrement → zoom → arrêt.');
+  console.log('     partage d\'écran → chiffrement → déchiffrement → zoom 1:1 → arrêt côté aidée → arrêt côté technicien.');
 }
 
 main()

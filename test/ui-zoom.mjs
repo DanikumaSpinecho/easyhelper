@@ -14,7 +14,8 @@ import { readFileSync } from 'node:fs';
 const IDS = [
   'login', 'codeEntry', 'viewer', 'loginForm', 'pw', 'loginStatus',
   'codeForm', 'code', 'joinStatus', 'screen', 'screenBox', 'zoomIn',
-  'zoomOut', 'zoomFit', 'zoomLabel', 'viewerStatus', 'closeBtn', 'logoutBtn',
+  'zoomOut', 'zoomFit', 'zoomReal', 'zoomLabel', 'viewerStatus', 'closeBtn',
+  'terminateBtn', 'logoutBtn',
   'liveBanner', 'liveBannerText',
   'badgeHttps', 'badgeE2ee', 'badgeConn', 'sysInfo',
   'diagOs', 'diagBrowser', 'diagRam', 'diagCores', 'diagScreen', 'diagLang', 'diagNet', 'diagSecure',
@@ -28,6 +29,10 @@ function makeEl(id) {
     // Texte initial repris du HTML : la bannière porte déjà « Écran en direct ».
     textContent: id === 'liveBannerText' ? 'Écran en direct' : '',
     disabled: false,
+    // Dimensions simulées : nécessaires au bouton « 1:1 », qui rapporte la
+    // largeur native de l'image à la largeur utile du cadre.
+    naturalWidth: id === 'screen' ? 1600 : 0,
+    clientWidth: id === 'screenBox' ? 800 : 0,
     handlers: {},
     classList: {
       remove: (c) => cls.delete(c),
@@ -82,6 +87,8 @@ function testZoom(jsPath, label) {
 
   const banner = els.get('liveBanner');
   const bannerText = els.get('liveBannerText');
+  const realBtn = els.get('zoomReal');
+  const termBtn = els.get('terminateBtn');
 
   // Les bandeaux d'état sont initialisés dès le chargement : le transport
   // HTTPS/HTTP est connu immédiatement, les autres attendent la session.
@@ -122,6 +129,17 @@ function testZoom(jsPath, label) {
   assert.equal(lbl.textContent, '100 %', `[${label}] retour à l'ajustement`);
   assert.equal(img.style.width, '100%', `[${label}] largeur ajustée rétablie`);
 
+  // « 1:1 » : la largeur native de l'image (1600 px simulés) rapportée à la
+  // largeur utile du cadre (800 px) donne 200 %. C'est le seul réglage qui
+  // reproduit exactement les pixels envoyés par la personne aidée — celui qui
+  // rend le texte fin lisible sans agrandir puis deviner.
+  assert.ok(realBtn, `[${label}] bouton « 1:1 » présent`);
+  realBtn.click();
+  assert.equal(lbl.textContent, '200 %', `[${label}] « 1:1 » calculé depuis les dimensions réelles`);
+  assert.equal(img.style.width, '200%', `[${label}] largeur réelle appliquée`);
+  fitBtn.click();
+  assert.equal(lbl.textContent, '100 %', `[${label}] retour à l'ajustement après « 1:1 »`);
+
   // Le cadre de l'image existe (c'est lui qui défile quand l'image est zoomée).
   assert.ok(box, `[${label}] cadre de défilement présent`);
 
@@ -140,6 +158,11 @@ function testZoom(jsPath, label) {
   inBtn.tap();
   inBtn.tap();
   assert.equal(lbl.textContent, '175 %', `[${label}] appuis rapides tous pris en compte`);
+
+  // L'arrêt net est câblé : un appui doit déclencher l'appel serveur qui clôt
+  // la session (le technicien ne dépend plus de la personne aidée).
+  assert.ok(termBtn, `[${label}] bouton d'arrêt net présent`);
+  assert.ok((termBtn.handlers.click || []).length >= 1, `[${label}] arrêt net câblé`);
 
   // La bannière annonce l'état réel, y compris à la fin du partage.
   assert.equal(bannerText.textContent, 'Écran en direct', `[${label}] bannière initiale`);
@@ -174,6 +197,9 @@ function testPages() {
       assert.match(html, /id="zoomIn"/, `[${p.label}] bouton zoom + présent`);
       assert.match(html, /id="zoomOut"/, `[${p.label}] bouton zoom − présent`);
       assert.match(html, /id="zoomFit"/, `[${p.label}] bouton d'ajustement présent`);
+      assert.match(html, /id="zoomReal"/, `[${p.label}] bouton « 1:1 » présent`);
+      assert.match(html, /id="terminateBtn"/, `[${p.label}] bouton d'arrêt net présent`);
+      assert.match(html, /techPage/, `[${p.label}] page élargie pour la lecture de l'écran`);
       assert.match(html, /id="screenBox"/, `[${p.label}] cadre de défilement présent`);
       assert.match(html, /id="liveBannerText"/, `[${p.label}] bannière d'état pilotable`);
       assert.match(html, /id="badgeHttps"/, `[${p.label}] bandeau HTTPS présent`);
@@ -213,9 +239,42 @@ function testStyles() {
   }
 }
 
+function testSources() {
+  // Garanties de source : deux propriétés impossibles à mesurer de façon fiable
+  // dans un navigateur de test, mais vérifiables dans le code — et ce sont
+  // exactement les régressions qui ont rendu le texte illisible et laissé
+  // traîner des sessions après la fermeture d'une fenêtre.
+  for (const file of ['php-full/user.js', 'vps-node/public/user.js']) {
+    const js = readFileSync(new URL('../' + file, import.meta.url), 'utf8');
+    assert.match(js, /1920 \/ video\.videoWidth/,
+      `[${file}] capture à la résolution native (plafond 1920, plus 1280)`);
+    assert.doesNotMatch(js, /1280 \/ video\.videoWidth/,
+      `[${file}] plus aucun bridage à 1280 px`);
+    assert.match(js, /pagehide/,
+      `[${file}] fermeture de fenêtre traitée (pagehide)`);
+    assert.match(js, /action=stop|type: 'stop'/,
+      `[${file}] arrêt annoncé au serveur`);
+    console.log(`  OK  ${file} : capture native, arrêt signalé à la fermeture`);
+  }
+  for (const file of ['php-full/tech.js', 'vps-node/public/tech.js']) {
+    const js = readFileSync(new URL('../' + file, import.meta.url), 'utf8');
+    assert.match(js, /zoomReal/, `[${file}] bouton « 1:1 » câblé`);
+    assert.match(js, /terminateBtn/, `[${file}] arrêt net côté technicien câblé`);
+    assert.match(js, /removeAttribute\('src'\)/, `[${file}] image effacée à la fin de session`);
+    console.log(`  OK  ${file} : « 1:1 », arrêt net et effacement de l'image`);
+  }
+  for (const file of ['php-full/style.css', 'vps-node/public/style.css']) {
+    const css = readFileSync(new URL('../' + file, import.meta.url), 'utf8');
+    assert.match(css, /\.techPage \.wrap/, `[${file}] page technicien élargie`);
+    assert.doesNotMatch(css, /aspect-ratio: 16 \/ 10/, `[${file}] plus de cadre en bande étroite`);
+    console.log(`  OK  ${file} : vue technicien pleine largeur`);
+  }
+}
+
 console.log('Interface technicien — vérification fonctionnelle');
 testZoom('php-full/tech.js', 'variante PHP');
 testZoom('vps-node/public/tech.js', 'variante Node');
 testPages();
 testStyles();
+testSources();
 console.log('OK — zoom, bannière d\'état, geste tactile et crédit discret conformes.');

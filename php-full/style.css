@@ -7,6 +7,10 @@ body {
   min-height: 100vh;
 }
 .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+/* La page technicien n'est pas une page de lecture : son contenu utile est
+   l'image. La colonne de 640 px la réduisait à un tiers de la fenêtre et
+   rendait le texte illisible — elle s'élargit donc à la place disponible. */
+.techPage .wrap { max-width: 1600px; }
 header h1 { font-size: 1.6rem; margin: 8px 0 4px; }
 header p { color: #94a3b8; margin: 0 0 24px; }
 .card {
@@ -83,13 +87,14 @@ input:focus { outline: 2px solid #2563eb; }
 .screen {
   background: #000;
   border-radius: 10px;
-  /* Fenêtre de taille FIXE : la hauteur vient du VIEWPORT (via le rapport
-     16/10), jamais du contenu. Le zoom agrandit donc l'image À L'INTÉRIEUR,
-     et c'est le cadre qui défile — la page ne bouge pas. Sans cela le cadre
-     s'étirait avec l'image (354 px → 561 px) et repoussait tout le bas de
-     page, ce qui obligeait à faire défiler la page entière pour relire. */
-  aspect-ratio: 16 / 10;
-  max-height: 70vh;
+  /* Fenêtre de taille FIXE : la hauteur vient du VIEWPORT, jamais du contenu.
+     Le zoom agrandit donc l'image À L'INTÉRIEUR, et c'est le cadre qui défile
+     — la page ne bouge pas. Sans cela le cadre s'étirait avec l'image
+     (354 px → 561 px) et repoussait tout le bas de page.
+     La hauteur suit désormais la fenêtre (et non un rapport 16/10) : l'image
+     occupe vraiment l'espace disponible au lieu d'une bande étroite. */
+  height: 78vh;
+  min-height: 320px;
   overflow: auto;
   margin: 0 0 12px;
 }

@@ -263,6 +263,53 @@ async function main() {
   userBad.send(JSON.stringify({ type: 'auth', token: '0'.repeat(64) }));
   await badClosed;
 
+  // 13. Arret net decide par le technicien (API) : la personne aidée peut avoir
+  //     laissé son partage tourner (fenêtre oubliée). Le serveur doit clore et
+  //     prévenir la personne aidée.
+  step(13, 'arret net par le technicien (API)');
+  const s3 = await (await fetch(`${BASE}/api/session`, { method: 'POST' })).json();
+  const user3 = await wsOpen('ws://127.0.0.1:3080/ws/user');
+  user3.send(JSON.stringify({ type: 'auth', token: s3.token }));
+  await new Promise((r) => setTimeout(r, 150));
+  const tech3 = await wsOpen(`ws://127.0.0.1:3080/ws/tech?code=${s3.code}`, { headers: { cookie } });
+  await waitJson(tech3, 'joined');
+  const ended3Promise = waitJson(user3, 'session-ended');
+  const tech3Closed = waitClose(tech3);
+  const endRes = await fetch(`${BASE}/api/end`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie },
+    body: JSON.stringify({ code: s3.code }),
+  });
+  assert.equal(endRes.status, 200, 'POST /api/end');
+  const ended3 = await ended3Promise;
+  assert.equal(ended3.reason, 'tech-stopped', 'la personne aidée est prévenue de l\u2019arret');
+  await tech3Closed;
+  const jgone3 = await fetch(`${BASE}/api/join`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie },
+    body: JSON.stringify({ code: s3.code }),
+  });
+  assert.equal(jgone3.status, 404, 'code refusé après l\u2019arret net : on passe à la suivante');
+  const endNoAuth = await fetch(`${BASE}/api/end`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: s3.code }),
+  });
+  assert.equal(endNoAuth.status, 401, 'arret net refusé sans authentification');
+
+  // 14. Arret net par le canal WebSocket du technicien (meme effet).
+  step(14, 'arret net par le canal technicien');
+  const s4 = await (await fetch(`${BASE}/api/session`, { method: 'POST' })).json();
+  const user4 = await wsOpen('ws://127.0.0.1:3080/ws/user');
+  user4.send(JSON.stringify({ type: 'auth', token: s4.token }));
+  await new Promise((r) => setTimeout(r, 150));
+  const tech4 = await wsOpen(`ws://127.0.0.1:3080/ws/tech?code=${s4.code}`, { headers: { cookie } });
+  await waitJson(tech4, 'joined');
+  const ended4Promise = waitJson(user4, 'session-ended');
+  tech4.send(JSON.stringify({ type: 'stop' }));
+  const ended4 = await ended4Promise;
+  assert.equal(ended4.reason, 'tech-stopped', 'arret par le canal technicien');
+
   console.log('OK — relais Node.js, authentification, limites, cycle de vie et chiffrement de bout en bout validés.');
 }
 

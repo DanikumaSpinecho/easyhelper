@@ -6,9 +6,9 @@
   <meta name="robots" content="noindex, nofollow">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'">
   <title>Espace technicien</title>
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
-<body>
+<body class="techPage">
 <main class="wrap">
   <header>
     <h1>Espace technicien</h1>
@@ -42,6 +42,7 @@
       <span id="zoomLabel" class="muted zoomLabel">100 %</span>
       <button id="zoomIn" class="ghost zoomBtn" type="button" title="Agrandir" aria-label="Agrandir le zoom">+</button>
       <button id="zoomFit" class="ghost zoomBtn" type="button" title="Revenir à la taille d'ajustement">Ajuster</button>
+      <button id="zoomReal" class="ghost zoomBtn" type="button" title="Taille réelle : 1 pixel de l'écran aidé = 1 pixel à l'écran">1:1</button>
     </div>
     <div class="connStrip">
       <span id="badgeHttps" class="badge off">…</span>
@@ -62,6 +63,7 @@
       </div>
     </div>
     <p id="viewerStatus" class="muted"></p>
+    <button id="terminateBtn" class="ghost big" type="button">Terminer la session</button>
     <button id="closeBtn" class="ghost big" type="button">Fermer la vue</button>
   </section>
 
@@ -73,6 +75,6 @@
   </footer>
 </main>
 <script src="crypto.js?v=3"></script>
-<script src="tech.js?v=5"></script>
+<script src="tech.js?v=6"></script>
 </body>
 </html>

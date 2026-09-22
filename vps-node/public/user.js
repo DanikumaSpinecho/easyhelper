@@ -41,6 +41,20 @@
     if (text) show(statusEl); else hide(statusEl);
   }
 
+  // Motif de fin exprimé en clair : la personne aidée doit comprendre pourquoi
+  // le partage s'est arrêté, sans jargon (elle n'a rien demandé).
+  function reasonLabel(reason) {
+    switch (reason) {
+      case 'user-stopped': return 'Vous avez arrêté le partage.';
+      case 'tech-stopped': return 'Le technicien a mis fin à la session.';
+      case 'user-left': return 'Partage terminé : la fenêtre a été fermée.';
+      case 'client-gone': return 'Session expirée : la fenêtre de partage avait été fermée.';
+      case 'idle-timeout': return 'Session expirée après une longue inactivité.';
+      case 'max-duration': return 'Durée maximale de la session atteinte.';
+      default: return 'Session terminée (' + (reason || 'serveur') + ').';
+    }
+  }
+
   function isSupported() {
     return window.isSecureContext &&
       typeof navigator.mediaDevices !== 'undefined' &&
@@ -163,7 +177,7 @@
       } else if (msg.type === 'tech-left') {
         peerNote.textContent = 'Votre proche s\u2019est déconnecté (le partage continue).';
       } else if (msg.type === 'session-ended') {
-        endLocal('La session a été terminée (' + (msg.reason || 'serveur') + ').');
+        endLocal(reasonLabel(msg.reason));
       }
     };
     ws.onclose = () => {
@@ -229,7 +243,11 @@
     if (mode === 'wait') return;   // on attend la clé du technicien
     capturing = true;
 
-    const scale = Math.min(1, 1280 / video.videoWidth);
+    // Résolution native de l'écran (plafonnée à 1920) : réduire à 1280 px
+    // rendait le texte illisible — zoomer ensuite n'agrandissait que des pixels
+    // qui n'avaient jamais été transmis. Le budget de taille est tenu par la
+    // qualité adaptative, pas par la résolution.
+    const scale = Math.min(1, 1920 / video.videoWidth);
     const w = Math.max(2, Math.round(video.videoWidth * scale));
     const h = Math.max(2, Math.round(video.videoHeight * scale));
     if (canvas.width !== w) canvas.width = w;
@@ -308,5 +326,11 @@
 
   startBtn.addEventListener('click', startSharing);
   stopBtn.addEventListener('click', stopSharing);
+  // Fermeture d'onglet ou de fenêtre : on prévient explicitement le relais (le
+  // serveur termine de toute façon la session à la fermeture du WebSocket).
+  window.addEventListener('pagehide', () => {
+    if (!sessionInfo || !ws || ws.readyState !== WebSocket.OPEN) return;
+    try { ws.send(JSON.stringify({ type: 'stop' })); } catch { /* ignore */ }
+  });
   checkCapability();
 })();

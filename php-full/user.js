@@ -40,6 +40,19 @@
     if (text) show(statusEl); else hide(statusEl);
   }
 
+  // Motif de fin exprimé en clair : la personne aidée doit comprendre pourquoi
+  // le partage s'est arrêté, sans jargon (elle n'a rien demandé).
+  function reasonLabel(reason) {
+    switch (reason) {
+      case 'user-stopped': return 'Vous avez arrêté le partage.';
+      case 'tech-stopped': return 'Le technicien a mis fin à la session.';
+      case 'client-gone': return 'Session expirée : la fenêtre de partage avait été fermée.';
+      case 'idle-timeout': return 'Session expirée après une longue inactivité.';
+      case 'max-duration': return 'Durée maximale de la session atteinte.';
+      default: return 'Session terminée (' + (reason || 'serveur') + ').';
+    }
+  }
+
   function isSupported() {
     return window.isSecureContext &&
       typeof navigator.mediaDevices !== 'undefined' &&
@@ -115,6 +128,9 @@
     if (track) track.addEventListener('ended', () => {
       if (stopping) return;
       stopping = true;
+      // « Arrêter le partage » de Chrome ferme la piste sans prévenir le
+      // serveur : la session restait « en direct » et l'image restait stockée.
+      notifyStop();
       resetUi();
       setStatus('Le partage a été arrêté depuis le navigateur.');
     });
@@ -180,7 +196,7 @@
       const j = await res.json().catch(() => null);
       if (!j) return;
       if (j.state === 'ended') {
-        endLocal('La session a été terminée (' + (j.reason || 'serveur') + ').');
+        endLocal(reasonLabel(j.reason));
         return;
       }
       await syncTechKey(j.tech_pub || '', !!j.tech_joined, j.tech_crypto === true);
@@ -221,7 +237,11 @@
     if (mode === 'wait') return;   // on attend la clé du technicien
     capturing = true;
 
-    const scale = Math.min(1, 1280 / video.videoWidth);
+    // Résolution native de l'écran (plafonnée à 1920) : réduire à 1280 px
+    // rendait le texte illisible — zoomer ensuite n'agrandissait que des pixels
+    // qui n'avaient jamais été transmis. Le budget de taille est tenu par la
+    // qualité adaptative (juste en dessous), pas par la résolution.
+    const scale = Math.min(1, 1920 / video.videoWidth);
     const w = Math.max(2, Math.round(video.videoWidth * scale));
     const h = Math.max(2, Math.round(video.videoHeight * scale));
     if (canvas.width !== w) canvas.width = w;
@@ -277,7 +297,7 @@
       intervalMs = Math.max(400, intervalMs - 100);
       const j = await res.json().catch(() => null);
       if (j && j.state === 'ended') {
-        endLocal('La session a été terminée (' + (j.reason || 'serveur') + ').');
+        endLocal(reasonLabel(j.reason));
         return;
       }
       if (j && j.tech_pub) await syncTechKey(j.tech_pub, !!j.tech_joined, j.tech_crypto === true);
@@ -321,22 +341,43 @@
     };
   }
 
+  // Prévient le serveur que le partage s'arrête — y compris quand la fenêtre se
+  // ferme. Sans cela, la session restait « en direct » et la dernière image
+  // restait sur le serveur jusqu'à expiration : à éviter par respect de la vie
+  // privée. sendBeacon est le seul envoi que le navigateur accepte de terminer
+  // après la fermeture de la page (il ne permet pas d'en-têtes personnalisés,
+  // d'où le jeton dans le corps JSON, accepté par le serveur).
+  function notifyStop() {
+    if (!sessionInfo) return;
+    const code = sessionInfo.code;
+    const token = sessionInfo.token;
+    sessionInfo = null;
+    const body = JSON.stringify({ code, token });
+    try {
+      if (navigator.sendBeacon
+        && navigator.sendBeacon(API + '?action=stop', new Blob([body], { type: 'application/json' }))) return;
+    } catch { /* repli ci-dessous */ }
+    try {
+      fetch(API + '?action=stop', {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json', 'X-Code': code, 'X-Token': token },
+        body,
+      }).catch(() => {});
+    } catch { /* filet de sécurité : le serveur termine seul la session */ }
+  }
+
   async function stopSharing() {
     if (stopping) return;
     stopping = true;
-    if (sessionInfo) {
-      try {
-        await fetch(API + '?action=stop', {
-          method: 'POST',
-          headers: { 'X-Code': sessionInfo.code, 'X-Token': sessionInfo.token },
-        });
-      } catch { /* ignore */ }
-    }
+    notifyStop();
     resetUi();
     setStatus('Partage terminé. Rien n\u2019a été enregistré.');
   }
 
   startBtn.addEventListener('click', startSharing);
   stopBtn.addEventListener('click', stopSharing);
+  // Fermeture d'onglet ou de fenêtre : dernier moment où l'on peut encore agir.
+  window.addEventListener('pagehide', () => { if (sessionInfo) notifyStop(); });
   checkCapability();
 })();
