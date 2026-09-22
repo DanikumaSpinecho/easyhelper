@@ -285,7 +285,7 @@
       : reason === 'tech-stopped'
         ? 'Vous avez mis fin à la session. Plus aucune image n\u2019est acceptée.'
         : reason === 'client-gone'
-          ? 'La fenêtre de partage a été fermée : session terminée.'
+          ? 'La personne aidée ne répond plus : session terminée.'
           : 'Session terminée (' + reason + ').';
     setStatus(viewerStatus, endMsg);
     setLiveBanner('Partage terminé', true);

@@ -46,7 +46,7 @@
     switch (reason) {
       case 'user-stopped': return 'Vous avez arrêté le partage.';
       case 'tech-stopped': return 'Le technicien a mis fin à la session.';
-      case 'client-gone': return 'Session expirée : la fenêtre de partage avait été fermée.';
+      case 'client-gone': return 'Session expirée : le partage n\u2019a plus rien envoyé pendant 2 minutes.';
       case 'idle-timeout': return 'Session expirée après une longue inactivité.';
       case 'max-duration': return 'Durée maximale de la session atteinte.';
       default: return 'Session terminée (' + (reason || 'serveur') + ').';
