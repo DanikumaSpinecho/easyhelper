@@ -70,6 +70,25 @@ async function main() {
     } catch { /* dossier absent : rien à purger */ }
   }
 
+  // Le serveur limite les créations de session (6/min/IP : protection réelle
+  // contre l'abus). Deux suites enchaînées dans la même minute, ou une
+  // réexécution rapprochée, épuisent ce quota — et le test échouerait alors pour
+  // une raison étrangère à ce qu'il mesure (constaté en production après un test
+  // e2e). On attend donc que le quota se recharge, sans jamais assouplir la
+  // limite du serveur : c'est elle qu'on veut exercer, pas contourner.
+  async function createSession(body) {
+    for (let i = 0; i < 12; i++) {
+      const res = await fetch(`${API}?action=create`, {
+        method: 'POST',
+        ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+      });
+      if (res.status !== 429) return res;
+      console.log('   (quota de créations atteint, attente 10 s avant nouvel essai…)');
+      await new Promise((r) => setTimeout(r, 10000));
+    }
+    throw new Error('créations refusées (429) de façon persistante');
+  }
+
   // 0. Diagnostic d'installation
   let r = await fetch(`${API}?action=selftest`);
   assert.equal(r.status, 200, 'selftest');
@@ -83,11 +102,7 @@ async function main() {
   user.generateKeys();
   const userPub = user.getPublicKey().toString('base64');
 
-  r = await fetch(`${API}?action=create`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userPub, diag: { os: 'TestOS', mem: 8, https: true } }),
-  });
+  r = await createSession({ userPub, diag: { os: 'TestOS', mem: 8, https: true } });
   assert.equal(r.status, 200, 'create');
   const sess = await r.json();
   assert.match(sess.code, /^\d{6}$/, 'code à 6 chiffres');
@@ -217,7 +232,7 @@ async function main() {
   assert.equal(fj.state, 'ended', 'état ended transmis au technicien');
 
   // 9. Image trop grande refusée
-  const s2 = await (await fetch(`${API}?action=create`, { method: 'POST' })).json();
+  const s2 = await (await createSession()).json();
   r = await fetch(`${API}?action=upload`, {
     method: 'POST',
     headers: { 'X-Code': s2.code, 'X-Token': s2.token },
@@ -227,7 +242,7 @@ async function main() {
 
   // 10. Arrêt par corps JSON, sans en-têtes personnalisés : c'est exactement ce
   // que le navigateur envoie à la fermeture de la fenêtre (sendBeacon).
-  const s3 = await (await fetch(`${API}?action=create`, { method: 'POST' })).json();
+  const s3 = await (await createSession()).json();
   r = await fetch(`${API}?action=stop`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -239,11 +254,7 @@ async function main() {
 
   // 11. Arrêt net décidé par le technicien : la personne aidée peut avoir
   // laissé son partage tourner, le technicien doit pouvoir clore de son côté.
-  const s4 = await (await fetch(`${API}?action=create`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userPub }),
-  })).json();
+  const s4 = await (await createSession({ userPub })).json();
   r = await fetch(`${API}?action=join`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', cookie },
@@ -285,11 +296,7 @@ async function main() {
   //     Ce contrôle exige d'antidater le repère de vie de la session : il ne
   //     peut se faire qu'en local, en écrivant directement la métadonnée.
   if (!IS_REMOTE) {
-    const s5 = await (await fetch(`${API}?action=create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userPub }),
-    })).json();
+    const s5 = await (await createSession({ userPub })).json();
     r = await fetch(`${API}?action=upload`, {
       method: 'POST',
       headers: { 'X-Code': s5.code, 'X-Token': s5.token, 'Content-Type': 'application/octet-stream' },
@@ -315,7 +322,7 @@ async function main() {
   // 13. Journal des connexions : trace d'audit des accès technicien.
   //     Il doit exister, être refusé sans authentification, et ne JAMAIS
   //     contenir une adresse IP complète.
-  const s6 = await (await fetch(`${API}?action=create`, { method: 'POST' })).json();
+  const s6 = await (await createSession()).json();
   r = await fetch(`${API}?action=log`);
   assert.equal(r.status, 401, 'journal refusé sans authentification');
   r = await fetch(`${API}?action=join`, {
