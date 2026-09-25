@@ -238,6 +238,9 @@
     setBadge(badgeE2ee, encryptedSession ? 'ok' : 'warn',
       encryptedSession ? '🔒 Chiffré de bout en bout' : '⚠ Relais direct (non chiffré)');
     openViewer(code);
+    // Le journal vient d'enregistrer CETTE connexion : on le rafraîchit pour
+    // qu'elle y apparaisse sans attendre un rechargement de page.
+    loadAccessLog();
   });
 
   function openViewer(code) {
@@ -426,4 +429,10 @@
   initBadges();
   applyZoom();
   refreshAuth();
+
+  // Ouvrir le panneau rafraîchit la trace : on veut voir la connexion en cours,
+  // pas un instantané figé depuis la connexion du technicien.
+  if (logPanel && logPanel.addEventListener) {
+    logPanel.addEventListener('toggle', () => { if (logPanel.open) loadAccessLog(); });
+  }
 })();
