@@ -14,3 +14,7 @@ et des données de session
 php-full/config.php
 php-full/data/*
 !php-full/data/.htaccess
+
+# Variante Node.js : configuration locale et journal des connexions
+# (dossier local, jamais versionné — il contient des traces d'accès)
+vps-node/data/

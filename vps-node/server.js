@@ -42,6 +42,7 @@ const DEFAULTS = {
   loginWindowMs: 15 * 60 * 1000,     // …par fenêtre glissante (15 min)
   createMaxPerMin: 6,                // créations de session max par minute et par IP
   joinMaxPerMin: 30,                 // vérifications de code max par minute et par IP
+  maxAccessLog: 200,                 // entrées conservées dans le journal des connexions
 };
 
 let config = { ...DEFAULTS };
@@ -72,6 +73,87 @@ function ipInfo(ip) {
     ipState.set(ip, st);
   }
   return st;
+}
+
+// ---------------------------------------------------------------------------
+// Journal des connexions (traçabilité)
+// ---------------------------------------------------------------------------
+
+const ACCESS_LOG = path.join(__dirname, 'data', 'access.jsonl');
+
+/**
+ * Offusque une adresse IP : la trace sert à distinguer des provenances, pas à
+ * identifier une personne. On masque donc la fin de l'adresse (dernier octet en
+ * IPv4, identité d'interface en IPv6) AVANT de l'écrire : le journal ne
+ * contient jamais une adresse complète.
+ */
+function maskIp(ip) {
+  if (!ip || ip === 'unknown') return 'inconnue';
+  let v = String(ip);
+  if (v.startsWith('::ffff:') && v.includes('.')) v = v.slice(7);   // IPv4 encapsulée en IPv6
+  if (v.includes('.')) {
+    const p = v.split('.');
+    if (p.length !== 4) return 'inconnue';
+    for (const o of p) {
+      if (!/^\d{1,3}$/.test(o) || Number(o) > 255) return 'inconnue';
+    }
+    return `${Number(p[0])}.${Number(p[1])}.${Number(p[2])}.x`;
+  }
+  if (!v.includes(':')) return 'inconnue';
+  // Développe la compression « :: » en 8 groupes — sans quoi 'fe80::1' donnerait
+  // 'fe80:1', qui désigne une AUTRE adresse : le journal afficherait un préfixe
+  // faux. inet_pton fait ce travail côté PHP ; ici on l'écrit explicitement.
+  const parts = v.split('::');
+  if (parts.length > 2) return 'inconnue';
+  const head = parts[0] ? parts[0].split(':') : [];
+  const tail = (parts.length === 2 && parts[1]) ? parts[1].split(':') : [];
+  const groupes = parts.length === 2
+    ? head.concat(Array(Math.max(0, 8 - head.length - tail.length)).fill('0'), tail)
+    : head;
+  if (groupes.length !== 8) return 'inconnue';
+  const net = [];
+  for (const g of groupes.slice(0, 4)) {
+    if (!/^[0-9a-fA-F]{1,4}$/.test(g)) return 'inconnue';
+    net.push(g.replace(/^0+/, '') || '0');   // même forme que la variante PHP
+  }
+  return net.join(':') + ':x:x:x:x';
+}
+
+/**
+ * Journalise l'accès d'un technicien à une session : date, heure et adresses IP
+ * offusquées des deux côtés. Aucune adresse complète n'est écrite.
+ *
+ * Le journal est borné (config.maxAccessLog) et survit à la fin des sessions :
+ * c'est précisément son objet. Il vit hors du dossier public, donc n'est jamais
+ * servi par le web, et n'est lisible que par le technicien authentifié.
+ */
+function logAccess(techIp, userIp, code) {
+  const entry = JSON.stringify({
+    t: Date.now(),
+    tech: maskIp(techIp),
+    user: maskIp(userIp),
+    code: /^\d{6}$/.test(String(code || '')) ? String(code) : '',
+  });
+  // Jamais d'échec pour l'assistance : une trace impossible à écrire passe.
+  try {
+    if (!fs.existsSync(path.dirname(ACCESS_LOG))) fs.mkdirSync(path.dirname(ACCESS_LOG), { recursive: true });
+    fs.appendFileSync(ACCESS_LOG, entry + '\n', 'utf8');
+    // Plafond : on élague en gardant les entrées les plus récentes.
+    const lines = fs.readFileSync(ACCESS_LOG, 'utf8').split('\n').filter((l) => l.trim() !== '');
+    const max = Math.max(1, Number(config.maxAccessLog) || 200);
+    if (lines.length > max) fs.writeFileSync(ACCESS_LOG, lines.slice(-max).join('\n') + '\n', 'utf8');
+  } catch { /* ignore */ }
+}
+
+/** Entrées les plus récentes d'abord, prêtes pour l'affichage. */
+function readAccessLog(limit = 200) {
+  try {
+    if (!fs.existsSync(ACCESS_LOG)) return [];
+    const lines = fs.readFileSync(ACCESS_LOG, 'utf8').split('\n').filter((l) => l.trim() !== '');
+    return lines.slice(-Math.max(1, limit)).reverse()
+      .map((l) => { try { return JSON.parse(l); } catch { return null; } })
+      .filter((e) => e && typeof e.t === 'number');
+  } catch { return []; }
 }
 
 function windowAllows(times, now, max, windowMs) {
@@ -304,6 +386,13 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
 
+  // GET /api/log — journal des connexions (technicien authentifié). C'est une
+  // trace d'audit : elle n'a rien à faire dans une page publique.
+  if (req.method === 'GET' && url.pathname === '/api/log') {
+    if (!isAuthed(req)) return sendJson(res, 401, { error: 'auth-required' });
+    return sendJson(res, 200, { entries: readAccessLog(config.maxAccessLog), masked: true });
+  }
+
   // GET /api/me — l'interface technicien s'en sert pour afficher le bon écran
   if (req.method === 'GET' && url.pathname === '/api/me') {
     const authed = isAuthed(req);
@@ -363,6 +452,9 @@ async function handleApi(req, res, url) {
     // pour chiffrer à son intention. Le serveur ne peut pas en déduire la clé.
     const techPub = validPubkey(body && typeof body.techPub === 'string' ? body.techPub : '');
     session.techPub = techPub;
+    // Traçabilité : qui (technicien) a consulté quelle session (personne aidée),
+    // quand, et depuis quelles adresses — offusquées.
+    logAccess(ip, session.ip, code);
     return sendJson(res, 200, {
       ok: true,
       userPub: session.userPub,

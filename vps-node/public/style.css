@@ -165,3 +165,18 @@ footer .credit a:hover { color: #94a3b8; }
 .sysgrid { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: .85rem; }
 .sysgrid .k { color: #64748b; }
 .sysgrid .v { color: #e2e8f0; word-break: break-word; }
+
+/* --- Journal des connexions (traçabilité, replié par défaut) --- */
+.logPanel { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 12px 14px; margin: 16px 0 0; }
+.logPanel summary { cursor: pointer; color: #94a3b8; font-size: .85rem; letter-spacing: .05em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; list-style: none; }
+.logPanel summary::-webkit-details-marker { display: none; }
+/* La flèche indique l'état : elle pivote à l'ouverture. */
+.logPanel summary::before { content: '\25B6'; font-size: .7rem; transition: transform .15s ease; }
+.logPanel[open] summary::before { transform: rotate(90deg); }
+.logWrap { overflow-x: auto; margin-top: 10px; }
+.logTable { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.logTable th, .logTable td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #1e293b; color: #cbd5e1; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.logTable th { color: #64748b; font-weight: 600; text-transform: none; }
+.logNote { color: #64748b; font-size: .76rem; margin: 8px 0 0; }
+/* Date de dernière mise à jour, discrète à côté du crédit. */
+.buildDate { color: #5b6675; font-size: .72rem; }

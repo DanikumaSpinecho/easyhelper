@@ -310,6 +310,28 @@ async function main() {
   const ended4 = await ended4Promise;
   assert.equal(ended4.reason, 'tech-stopped', 'arret par le canal technicien');
 
+  // 15. Journal des connexions : trace d'audit des acces technicien. Il doit
+  //     etre refuse sans authentification et ne JAMAIS contenir une adresse
+  //     IP complete (un octet masque a l'ecriture, pas seulement a l'affichage).
+  step(15, 'journal des connexions');
+  const noAuthLog = await fetch(`${BASE}/api/log`);
+  assert.equal(noAuthLog.status, 401, 'journal refuse sans authentification');
+  const logRes = await fetch(`${BASE}/api/log`, { headers: { cookie } });
+  assert.equal(logRes.status, 200, 'journal accessible au technicien authentifie');
+  const journal = await logRes.json();
+  assert.ok(Array.isArray(journal.entries) && journal.entries.length > 0, 'au moins une entree journalisee');
+  assert.equal(journal.masked, true, 'journal annonce comme offusque');
+  const derniereEntree = journal.entries[0];
+  assert.ok(typeof derniereEntree.t === 'number' && derniereEntree.t > 0, 'horodatage present');
+  assert.match(String(derniereEntree.tech), /^[\d.]+x$|:x:x:x:x$|^inconnue$/, 'adresse technicien offusquee');
+  assert.match(String(derniereEntree.user), /^[\d.]+x$|:x:x:x:x$|^inconnue$/, 'adresse personne aidee offusquee');
+  for (const e of journal.entries) {
+    // Ni IPv4 complete, ni IPv6 complete (8 groupes).
+    assert.doesNotMatch(String(e.tech), /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/, 'aucune IPv4 complete (technicien)');
+    assert.doesNotMatch(String(e.user), /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/, 'aucune IPv4 complete (personne aidee)');
+    assert.ok(String(e.tech).includes('x'), 'adresse technicien bien masquee');
+  }
+
   console.log('OK — relais Node.js, authentification, limites, cycle de vie et chiffrement de bout en bout validés.');
 }
 

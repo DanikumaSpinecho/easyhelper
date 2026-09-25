@@ -50,4 +50,8 @@ return [
 
     // Optionnel : clé permettant d'appeler cron.php par HTTP (sinon CLI uniquement).
     'cron_key' => '',
+
+    // Journal des connexions (data/access.jsonl) : nombre d'entrées conservées.
+    // Les adresses y sont toujours offusquées (dernier octet masqué).
+    'max_access_log' => 200,
 ];

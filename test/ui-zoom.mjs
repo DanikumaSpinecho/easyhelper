@@ -19,6 +19,7 @@ const IDS = [
   'liveBanner', 'liveBannerText',
   'badgeHttps', 'badgeE2ee', 'badgeConn', 'sysInfo',
   'diagOs', 'diagBrowser', 'diagRam', 'diagCores', 'diagScreen', 'diagLang', 'diagNet', 'diagSecure',
+  'logPanel', 'logRows', 'logEmpty',
 ];
 
 function makeEl(id) {
@@ -207,12 +208,22 @@ function testPages() {
       assert.match(html, /id="badgeConn"/, `[${p.label}] bandeau de connexion présent`);
       assert.match(html, /id="sysInfo"/, `[${p.label}] panneau infos système présent`);
       assert.match(html, /id="diagOs"/, `[${p.label}] ligne système du panneau présente`);
+      // Journal des connexions : replié par défaut (l'audit ne s'impose pas),
+      // mais bien présent et ouvrable.
+      assert.match(html, /<details id="logPanel"/, `[${p.label}] journal des connexions présent`);
+      assert.match(html, /id="logSummary"/, `[${p.label}] journal ouvrable par sa flèche`);
+      assert.match(html, /id="logRows"/, `[${p.label}] lignes du journal`);
+      assert.match(html, /Dernière mise à jour/, `[${p.label}] libellé de la date de mise à jour`);
+      assert.match(html, /class="buildDate"[^>]*>\d{4}-\d{2}-\d{2}</,
+        `[${p.label}] date de dernière mise à jour affichée`);
     }
     // La page d'accueil est désormais un portail professionnel : les sections
     // « À propos » et les garanties sont là pour une catégorisation honnête.
     if (p.wrench) {
       assert.match(html, /À propos/, `[${p.label}] section À propos présente`);
       assert.match(html, /Chiffrement de bout en bout|chiffrée de bout en bout/, `[${p.label}] garantie de chiffrement affichée`);
+      assert.match(html, /class="buildDate"[^>]*>\d{4}-\d{2}-\d{2}</,
+        `[${p.label}] date de dernière mise à jour affichée`);
       if (p.label.startsWith('PHP')) {
         assert.doesNotMatch(html, /noindex/, `[${p.label}] page d'accueil indexable (catégorisation)`);
       }
@@ -261,14 +272,36 @@ function testSources() {
     assert.match(js, /zoomReal/, `[${file}] bouton « 1:1 » câblé`);
     assert.match(js, /terminateBtn/, `[${file}] arrêt net côté technicien câblé`);
     assert.match(js, /removeAttribute\('src'\)/, `[${file}] image effacée à la fin de session`);
-    console.log(`  OK  ${file} : « 1:1 », arrêt net et effacement de l'image`);
+    assert.match(js, /loadAccessLog/, `[${file}] journal des connexions chargé`);
+    assert.match(js, /td\.textContent = v/, `[${file}] journal affiché sans interprétation (textContent)`);
+    console.log(`  OK  ${file} : « 1:1 », arrêt net, effacement de l'image et journal`);
   }
   for (const file of ['php-full/style.css', 'vps-node/public/style.css']) {
     const css = readFileSync(new URL('../' + file, import.meta.url), 'utf8');
     assert.match(css, /\.techPage \.wrap/, `[${file}] page technicien élargie`);
     assert.doesNotMatch(css, /aspect-ratio: 16 \/ 10/, `[${file}] plus de cadre en bande étroite`);
-    console.log(`  OK  ${file} : vue technicien pleine largeur`);
+    assert.match(css, /\.logPanel \[open\] summary::before|\[open\] summary::before/,
+      `[${file}] la flèche du journal pivote à l'ouverture`);
+    assert.match(css, /\.buildDate/, `[${file}] date de mise à jour discrète`);
+    console.log(`  OK  ${file} : vue technicien pleine largeur, journal repliable, date discrète`);
   }
+  // Le masquage des adresses est une garantie de vie privée : il doit exister
+  // des DEUX côtés, et être appliqué à l'écriture (pas seulement à l'affichage).
+  const phpInc = readFileSync(new URL('../php-full/inc.php', import.meta.url), 'utf8');
+  assert.match(phpInc, /function mask_ip/, '[PHP] fonction de masquage présente');
+  assert.match(phpInc, /function log_access/, '[PHP] journalisation présente');
+  assert.match(phpInc, /mask_ip\(\$techIp\)[\s\S]{0,400}?mask_ip\(\$userIp\)/,
+    '[PHP] les deux adresses sont masquées AVANT écriture');
+  assert.match(phpInc, /\.x'/, '[PHP] dernier octet IPv4 masqué');
+  const nodeSrc = readFileSync(new URL('../vps-node/server.js', import.meta.url), 'utf8');
+  assert.match(nodeSrc, /function maskIp/, '[Node] fonction de masquage présente');
+  assert.match(nodeSrc, /function logAccess/, '[Node] journalisation présente');
+  assert.match(nodeSrc, /tech: maskIp\(techIp\)[\s\S]{0,200}?user: maskIp\(userIp\)/,
+    '[Node] les deux adresses sont masquées AVANT écriture');
+  // Le journal ne doit jamais être servi comme fichier statique.
+  assert.match(nodeSrc, /^\s*const\s+ACCESS_LOG\s*=\s*path\.join\(__dirname,\s*'data'/m,
+    '[Node] journal hors du dossier public (jamais servi)');
+  console.log('  OK  masquage des adresses appliqué à l\'écriture, dans les deux variantes');
 }
 
 console.log('Interface technicien — vérification fonctionnelle');

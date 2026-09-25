@@ -51,6 +51,25 @@ function decryptFrame(key, frame) {
 }
 
 async function main() {
+  // Fixture locale : on repart d'un état vierge. Les compteurs anti-rebond et
+  // les sessions laissées par une exécution précédente sont un état SERVEUR
+  // persistant qui ferait échouer ce test pour une raison étrangère au code
+  // testé (quota de créations, ou plafond de sessions par IP). Contre la
+  // production, rien n'est touché : les limites restent celles du serveur.
+  if (!IS_REMOTE) {
+    try {
+      const dataDir = path.join(SESSIONS_DIR, '..');
+      for (const f of fs.readdirSync(dataDir)) {
+        if (f.startsWith('rl_')) fs.rmSync(path.join(dataDir, f), { force: true });
+      }
+      for (const f of fs.readdirSync(SESSIONS_DIR)) {
+        if (/^(meta_|frame_|presence_|tmpmeta_|tmpframe_)/.test(f)) {
+          fs.rmSync(path.join(SESSIONS_DIR, f), { force: true });
+        }
+      }
+    } catch { /* dossier absent : rien à purger */ }
+  }
+
   // 0. Diagnostic d'installation
   let r = await fetch(`${API}?action=selftest`);
   assert.equal(r.status, 200, 'selftest');
@@ -292,6 +311,53 @@ async function main() {
   } else {
     console.log('   (contrôle de disparition du client : local uniquement)');
   }
+
+  // 13. Journal des connexions : trace d'audit des accès technicien.
+  //     Il doit exister, être refusé sans authentification, et ne JAMAIS
+  //     contenir une adresse IP complète.
+  const s6 = await (await fetch(`${API}?action=create`, { method: 'POST' })).json();
+  r = await fetch(`${API}?action=log`);
+  assert.equal(r.status, 401, 'journal refusé sans authentification');
+  r = await fetch(`${API}?action=join`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie },
+    body: JSON.stringify({ code: s6.code }),
+  });
+  assert.equal(r.status, 200, 'connexion du technicien (à journaliser)');
+  r = await fetch(`${API}?action=log`, { headers: { cookie } });
+  assert.equal(r.status, 200, 'journal accessible au technicien authentifié');
+  const journal = await r.json();
+  assert.ok(Array.isArray(journal.entries) && journal.entries.length > 0, 'au moins une entrée journalisée');
+  const derniere = journal.entries[0];
+  assert.equal(derniere.code, s6.code, 'session consignée dans la dernière entrée');
+  assert.ok(typeof derniere.t === 'number' && derniere.t > 0, 'horodatage présent');
+  assert.match(derniere.tech, /^[\d.]+x$|:x:x:x:x$|^inconnue$/, 'adresse du technicien offusquée');
+  assert.match(derniere.user, /^[\d.]+x$|:x:x:x:x$|^inconnue$/, 'adresse de la personne aidée offusquée');
+  // Aucune entrée ne doit contenir une adresse IPv4 complète (4 octets chiffrés).
+  for (const e of journal.entries) {
+    assert.doesNotMatch(String(e.tech), /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/, 'aucune adresse complète (technicien)');
+    assert.doesNotMatch(String(e.user), /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/, 'aucune adresse complète (personne aidée)');
+  }
+  if (!IS_REMOTE) {
+    // Contrôle de fond : ce qui est réellement écrit sur le disque.
+    const raw = fs.readFileSync(path.join(SESSIONS_DIR, '..', 'access.jsonl'), 'utf8');
+    assert.doesNotMatch(raw, /"tech":"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"/, 'le FICHIER ne contient aucune adresse complète');
+  }
+
+  // 14. Hygiène : on referme les sessions laissées ouvertes par ce test.
+  //     Sans cela elles saturent la limite de sessions par IP et font échouer le
+  //     test suivant (le nettoyage périodique ne passe qu'au bout d'une minute).
+  //     Un test ne doit pas laisser d'état derrière lui.
+  const restantes = [s2, s3, s4, s6];
+  let fermees = 0;
+  for (const s of restantes) {
+    const res = await fetch(`${API}?action=stop`, {
+      method: 'POST',
+      headers: { 'X-Code': s.code, 'X-Token': s.token },
+    }).catch(() => null);
+    if (res && res.ok) fermees++;
+  }
+  console.log(`   hygiène : ${fermees} session(s) de test refermée(s)`);
 
   console.log('OK — relais PHP, authentification, limites, cycle de vie et chiffrement de bout en bout validés.');
 }

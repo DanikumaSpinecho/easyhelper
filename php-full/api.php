@@ -14,6 +14,7 @@
  *   me       GET    état d'authentification du technicien       → {ok}
  *   join     POST   vérifie un code de session (technicien authentifié)
  *   fetch    GET    récupère la dernière image (long-polling, technicien authentifié)
+ *   log      GET    journal des connexions (technicien authentifié)
  *   selftest GET    diagnostic d'installation (aucune donnée sensible)
  */
 
@@ -303,6 +304,9 @@ switch ($action) {
         // connexion, puis bascule en direct seulement si c'est nécessaire.
         $meta['techJoined'] = true;
         $meta['techCrypto'] = $techPub !== '';
+        // Traçabilité : qui (technicien) a consulté quelle session (personne
+        // aidée), quand, et depuis quelles adresses — offusquées.
+        log_access(client_ip(), (string) ($meta['ip'] ?? ''), $code);
         save_meta($code, $meta);
         json_out(200, [
             'ok' => true,
@@ -315,8 +319,7 @@ switch ($action) {
         break;
 
     case 'fetch':
-        if ($_SERVER['REQUEST_METHOD'] !== 'GET') json_out(405, ['error' => 'method-not-allowed']);
-        auth_start();
+        if ($_SERVER['REQUEST_METHOD'] !== 'GET') json_out(405, ['error' => 'method-not-allowed']);        auth_start();
         if (!is_authed()) json_out(401, ['error' => 'auth-required']);
         $code = valid_code((string) ($_GET['code'] ?? ''));
         if ($code === '') json_out(400, ['error' => 'bad-code']);
@@ -363,6 +366,18 @@ switch ($action) {
         }
         http_response_code(204);
         exit;
+        break;
+
+    // Journal des connexions : qui a consulté quoi, quand, depuis quelles
+    // adresses offusquées. Réservé au technicien authentifié — c'est une trace
+    // d'audit, elle n'a rien à faire dans une page publique.
+    case 'log':
+        auth_start();
+        if (!is_authed()) json_out(401, ['error' => 'auth-required']);
+        json_out(200, [
+            'entries' => read_access_log($CONFIG['max_access_log']),
+            'masked' => true,
+        ]);
         break;
 
     case 'selftest':

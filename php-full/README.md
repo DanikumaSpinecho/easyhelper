@@ -85,8 +85,14 @@ En résumé :
   créations limitées à 6/min/IP.
 - **Expiration** : 10 min sans image, 1 h au total, purge automatique
   (à chaque requête + cron optionnel).
-- **Aucune conservation** : fichiers supprimés en fin de session ; le dossier
-  `data/` est interdit d'accès web (`.htaccess` + `RedirectMatch 403`).
+- **Aucune conservation des images** : fichiers supprimés en fin de session ;
+  le dossier `data/` est interdit d'accès web (`.htaccess` + `RedirectMatch 403`).
+- **Journal des connexions** (traçabilité) : `data/access.jsonl` consigne chaque
+  accès technicien (date, heure, code, adresses IP **offusquées à l'écriture** —
+  dernier octet masqué). Jamais d'image ni d'adresse complète. Borné par
+  `max_access_log` (200 entrées par défaut), lisible uniquement via
+  `api.php?action=log` par le technicien authentifié, et il survit à la purge
+  des sessions — c'est son objet.
 - **Anti-abus** : requêtes JSON (protégées par la politique CORS par défaut),
   limites de débit, en-têtes CSP/no-store/nosniff.
 

@@ -31,6 +31,10 @@ $DEFAULTS = [
     'login_window_ms' => 900000,    // …sur 15 min
     'create_max_per_min' => 6,      // créations de session par minute et par IP
     'join_max_per_min' => 30,       // vérifications de code par minute et par IP
+    // Entrées conservées dans le journal des connexions (data/access.jsonl).
+    // Au-delà, les plus anciennes sont retirées. Les adresses y sont toujours
+    // offusquées (dernier octet masqué).
+    'max_access_log' => 200,
     'cron_key' => '',               // optionnel : clé pour appeler cron.php par HTTP
 ];
 
@@ -55,6 +59,37 @@ function is_https(): bool
 {
     if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') return true;
     return ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+}
+
+/**
+ * Offusque une adresse IP : la trace sert à distinguer des provenances, pas à
+ * identifier une personne. On masque donc la fin de l'adresse (dernier octet
+ * en IPv4, identité d'interface en IPv6) AVANT de l'écrire : le journal ne
+ * contient jamais une adresse complète.
+ */
+function mask_ip(string $ip): string
+{
+    if ($ip === '' || strcasecmp($ip, 'unknown') === 0) return 'inconnue';
+    $bin = @inet_pton($ip);
+    if ($bin === false) return 'inconnue';
+    // Adresse IPv4 encapsulée en IPv6 (::ffff:192.168.1.45) : traitée en IPv4.
+    if (strlen($bin) === 16) {
+        $mapped = "\0\0\0\0\0\0\0\0\0\0\xff\xff";
+        if (strncmp($bin, $mapped, 12) === 0) $bin = substr($bin, 12);
+    }
+    if (strlen($bin) === 4) {
+        $o = unpack('C4', $bin);
+        return $o[1] . '.' . $o[2] . '.' . $o[3] . '.x';
+    }
+    if (strlen($bin) === 16) {
+        // On garde le préfixe réseau (/64) et on masque l'identité d'interface.
+        // Chaque groupe est dégraissé de ses zéros de tête : la variante Node.js
+        // produit la même forme, les deux journaux restent comparables.
+        $groups = str_split(bin2hex($bin), 4);
+        $groups = array_map(function ($g) { return ltrim($g, '0') === '' ? '0' : ltrim($g, '0'); }, $groups);
+        return implode(':', array_slice($groups, 0, 4)) . ':x:x:x:x';
+    }
+    return 'inconnue';
 }
 
 function valid_code(string $code): string
@@ -151,6 +186,74 @@ function client_gone(array $meta): bool
     global $CONFIG;
     $seen = (int) ($meta['clientSeen'] ?? $meta['created'] ?? 0);
     return $seen > 0 && (now_ms() - $seen) > (int) $CONFIG['client_gone_ms'];
+}
+
+// ---------------------------------------------------------------------------
+// Journal des connexions (traçabilité)
+// ---------------------------------------------------------------------------
+
+function access_log_path(): string
+{
+    return DATA_DIR . '/access.jsonl';
+}
+
+/**
+ * Journalise l'accès d'un technicien à une session : date, heure, et adresses
+ * IP offusquées des deux côtés. Aucune adresse complète n'est écrite.
+ *
+ * Le journal est borné : au-delà de 'max_access_log', les entrées les plus
+ * anciennes sont retirées. Il vit dans data/ (jamais servi par le web) et
+ * n'est lisible que par le technicien authentifié. La trace survit au
+ * nettoyage des sessions : c'est précisément son objet.
+ */
+function log_access(string $techIp, string $userIp, string $code): void
+{
+    global $CONFIG;
+    $entry = json_encode([
+        't' => now_ms(),
+        'tech' => mask_ip($techIp),
+        'user' => mask_ip($userIp),
+        'code' => valid_code($code) !== '' ? $code : '',
+    ]);
+    if ($entry === false) return;
+    $path = access_log_path();
+    $fh = @fopen($path, 'c+');
+    if ($fh === false) return; // journal indisponible : jamais d'échec pour l'assistance
+    try {
+        if (flock($fh, LOCK_EX)) {
+            $content = stream_get_contents($fh);
+            $lines = ($content === false || trim($content) === '') ? [] : explode("\n", trim($content));
+            $lines[] = $entry;
+            // Plafond : on conserve les entrées les plus récentes.
+            $max = max(1, (int) $CONFIG['max_access_log']);
+            if (count($lines) > $max) $lines = array_slice($lines, -$max);
+            ftruncate($fh, 0);
+            rewind($fh);
+            fwrite($fh, implode("\n", $lines) . "\n");
+            fflush($fh);
+        }
+    } finally {
+        @flock($fh, LOCK_UN);
+        @fclose($fh);
+    }
+}
+
+/**
+ * Renvoie les entrées les plus récentes d'abord, prêtes pour l'affichage.
+ */
+function read_access_log(int $limit = 200): array
+{
+    $path = access_log_path();
+    if (!is_file($path)) return [];
+    $content = @file_get_contents($path);
+    if ($content === false || trim($content) === '') return [];
+    $lines = array_slice(explode("\n", trim($content)), -max(1, $limit));
+    $out = [];
+    foreach (array_reverse($lines) as $line) {
+        $decoded = json_decode($line, true);
+        if (is_array($decoded) && isset($decoded['t'])) $out[] = $decoded;
+    }
+    return $out;
 }
 
 function rate_limited(string $kind, int $max, int $window_ms): bool{

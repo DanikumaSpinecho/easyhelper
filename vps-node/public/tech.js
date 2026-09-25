@@ -33,6 +33,9 @@
   const badgeE2ee = $('badgeE2ee');
   const badgeConn = $('badgeConn');
   const sysInfo = $('sysInfo');
+  const logPanel = $('logPanel');
+  const logRows = $('logRows');
+  const logEmpty = $('logEmpty');
 
   // Bandeau d'état : transport (HTTPS), chiffrement de bout en bout des images
   // et état de la connexion — la vérité de ce qui se passe, affichée.
@@ -122,8 +125,45 @@
     try {
       authed = (await fetch('/api/me')).ok;
     } catch { /* serveur injoignable */ }
-    if (authed) { hide(loginCard); show(codeCard); }
-    else { show(loginCard); hide(codeCard); hide(viewer); }
+    if (authed) { hide(loginCard); show(codeCard); loadAccessLog(); }
+    else { show(loginCard); hide(codeCard); hide(viewer); if (logPanel) hide(logPanel); }
+  }
+
+  // ---------------------------------------------------------------------
+  // Journal des connexions
+  // ---------------------------------------------------------------------
+  // Le code a été confié à un tiers : on garde une trace de qui a consulté
+  // quelle session, pour pouvoir répondre à la question « qui s'est connecté,
+  // quand ». Trace volontairement non définitive, réservée au technicien
+  // authentifié, et adresses offusquées côté serveur (dernier octet masqué) :
+  // le journal ne contient jamais une adresse complète.
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const fmtDate = (ms) => { const d = new Date(ms); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
+  const fmtTime = (ms) => { const d = new Date(ms); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()); };
+
+  async function loadAccessLog() {
+    if (!logPanel || !logRows || typeof logRows.appendChild !== 'function') return;
+    let entries = [];
+    try {
+      const res = await fetch('/api/log');
+      if (!res.ok) return;
+      const j = await res.json();
+      entries = (j && Array.isArray(j.entries)) ? j.entries : [];
+    } catch { return; /* journal indisponible : ne bloque jamais l'assistance */ }
+    logRows.textContent = '';
+    for (const e of entries) {
+      const tr = document.createElement('tr');
+      // Tout passe par textContent : rien de ce qui vient du journal n'est
+      // interprété comme du code.
+      for (const v of [fmtDate(e.t), fmtTime(e.t), e.tech || '—', e.user || '—', e.code || '—']) {
+        const td = document.createElement('td');
+        td.textContent = v;
+        tr.appendChild(td);
+      }
+      logRows.appendChild(tr);
+    }
+    if (logEmpty) { if (entries.length) hide(logEmpty); else show(logEmpty); }
+    show(logPanel);
   }
 
   function closeViewer(backToCode = true) {
@@ -154,7 +194,7 @@
       return;
     }
     pwInput.value = '';
-    if (res.ok) { hide(loginCard); show(codeCard); return; }
+    if (res.ok) { hide(loginCard); show(codeCard); loadAccessLog(); return; }
     if (res.status === 429) setStatus(loginStatus, 'Trop de tentatives. Réessayez dans quelques minutes.');
     else if (res.status === 503) setStatus(loginStatus, 'Service non configuré (mot de passe technicien absent).');
     else setStatus(loginStatus, 'Mot de passe incorrect.');

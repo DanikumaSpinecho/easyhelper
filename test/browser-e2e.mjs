@@ -144,6 +144,16 @@ async function start() {
   if (!browser) throw new Error('Chrome ou Edge introuvable');
 
   if (!REMOTE) {
+    // Fixture locale : les compteurs anti-rebond sont un état SERVEUR persistant
+    // (6 créations/min/IP). Deux suites enchaînées dans la même minute épuisent
+    // le quota, et la seconde échoue pour une raison étrangère au code testé —
+    // constaté en pratique. On repart donc d'un compteur vierge, uniquement en
+    // local : contre la production, les limites restent celles du serveur.
+    try {
+      for (const f of fs.readdirSync(path.join(SITE, 'data'))) {
+        if (f.startsWith('rl_')) fs.rmSync(path.join(SITE, 'data', f), { force: true });
+      }
+    } catch { /* dossier data absent : rien à purger */ }
     const php = findPhp();
     if (!php) throw new Error('PHP CLI introuvable (définissez PHP_BIN)');
     phpProc = spawn(php, ['-S', `127.0.0.1:${PORT}`, '-t', SITE], { stdio: 'ignore' });
@@ -403,8 +413,73 @@ async function main() {
   assert.ok(!nettoye, 'image effacée de la vue après la fin de session');
   console.log('   session close : code refusé (404) et image effacée de la vue');
 
+  console.log('8. journal des connexions et date de mise à jour');
+  const journalUi = await tech.eval(`(() => {
+    const p = document.getElementById('logPanel');
+    const d = document.querySelector('.buildDate');
+    return {
+      panneau: !!p,
+      replie: p ? !p.hasAttribute('open') : false,
+      resume: p && p.querySelector('summary') ? p.querySelector('summary').textContent.trim() : '',
+      date: d ? d.textContent.trim() : '',
+      infobulle: d ? d.getAttribute('title') : '',
+    };
+  })()`);
+  assert.equal(journalUi.panneau, true, 'panneau du journal présent');
+  assert.equal(journalUi.replie, true, 'journal replié par défaut (l\'audit ne s\'impose pas)');
+  assert.match(journalUi.resume, /Journal des connexions/, 'intitulé du journal');
+  assert.match(journalUi.date, /^\d{4}-\d{2}-\d{2}$/, 'date de dernière mise à jour affichée');
+  assert.match(journalUi.infobulle, /mise à jour/i, 'infobulle de la date');
+
+  // La flèche doit réellement ouvrir le tableau : on clique le résumé et on
+  // vérifie que le panneau s'ouvre ET que les lignes apparaissent. Sans ce
+  // contrôle, un <details> cassé passerait pour un journal replié.
+  const ouvert = await tech.eval(`(() => {
+    const p = document.getElementById('logPanel');
+    if (!p) return null;
+    const s = p.querySelector('summary');
+    const avant = { open: p.hasAttribute('open'), lignes: document.querySelectorAll('#logRows tr').length };
+    s.click();
+    return { avant, apres: { open: p.hasAttribute('open'), lignes: document.querySelectorAll('#logRows tr').length } };
+  })()`);
+  assert.equal(ouvert.avant.open, false, 'journal fermé avant le clic');
+  assert.equal(ouvert.apres.open, true, 'un clic sur la flèche ouvre le journal');
+  assert.ok(ouvert.apres.lignes > 0, `le tableau affiche des lignes une fois ouvert (${ouvert.apres.lignes})`);
+  console.log(`   journal ouvert par un clic : ${ouvert.apres.lignes} ligne(s) affichée(s)`);
+
+  // Le journal doit contenir la connexion de ce parcours, avec des adresses
+  // offusquées — vérifié ici dans le vrai navigateur, donc via la vraie route
+  // authentifiée (un technicien non connecté reçoit 401).
+  const journalDonnees = await tech.eval(`(async () => {
+    const r = await fetch('api.php?action=log');
+    if (!r.ok) return { statut: r.status };
+    const j = await r.json();
+    return { statut: 200, n: (j.entries || []).length,
+             premiere: (j.entries || [])[0] || null, masque: j.masked === true };
+  })()`);
+  assert.equal(journalDonnees.statut, 200, 'journal accessible au technicien connecté');
+  assert.ok(journalDonnees.n > 0, 'la connexion de ce parcours est consignée');
+  assert.equal(journalDonnees.masque, true, 'journal annoncé offusqué');
+  assert.ok(journalDonnees.premiere && journalDonnees.premiere.t > 0, 'entrée horodatée');
+  assert.match(String(journalDonnees.premiere.tech), /^[\d.]+x$|:x:x:x:x$|^inconnue$/,
+    'adresse du technicien offusquée');
+  assert.doesNotMatch(String(journalDonnees.premiere.tech), /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/,
+    'aucune adresse complète dans le journal');
+  console.log(`   journal : ${journalDonnees.n} entrée(s), plus récente « ${journalDonnees.premiere.tech} » / « ${journalDonnees.premiere.user} »`);
+  console.log(`   date de mise à jour affichée : ${journalUi.date}`);
+
+  // Le journal est une trace d'audit : il ne doit pas être lisible sans session.
+  // On interroge SANS cookie (`credentials: 'omit'`) — un nouvel onglet du même
+  // profil partagerait la session du technicien et le test ne prouverait rien.
+  const sansAuth = await tech.eval(`(async () => {
+    const r = await fetch('api.php?action=log', { credentials: 'omit' });
+    return r.status;
+  })()`);
+  assert.equal(sansAuth, 401, 'journal refusé sans session (requête sans cookie)');
+  console.log('   journal refusé (401) à une requête sans session');
+
   console.log('\nOK — parcours réel complet validé dans un vrai navigateur :');
-  console.log('     partage d\'écran → chiffrement → déchiffrement → zoom 1:1 → arrêt côté aidée → arrêt côté technicien.');
+  console.log('     partage d\'écran → chiffrement → déchiffrement → zoom 1:1 → arrêt côté aidée → arrêt côté technicien → journal d\'audit.');
 }
 
 main()
